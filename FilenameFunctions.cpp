@@ -6,12 +6,19 @@
     Written by: Craig A. Lindley
 */
 
-#include "FilenameFunctions.h"
+#include "FilenameFunctions.h"    //defines USE_SPIFFS as reqd
 
 #if defined (ARDUINO)
 #ifdef USE_SPIFFS
+#if defined(ESP8266)
 #include "FS.h"
-//#include <SPIFFS.h>
+#define USE_SPIFFS_DIR
+#elif defined(ESP32)
+#include <SPIFFS.h>
+#define SD SPIFFS
+#else
+#error USE_SPIFFS only valid on Expressif controllers
+#endif
 #else
 #include <SD.h>
 #endif
@@ -79,7 +86,7 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
 
     char *filename;
     numberOfFiles = 0;
-#ifdef USE_SPIFFS
+#ifdef USE_SPIFFS_DIR
     File file;
     Dir directory = SPIFFS.openDir(directoryName);
     //    if (!directory == 0) return -1;
@@ -87,7 +94,6 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
     while (directory.next()) {
         file = directory.openFile("r");
         if (!file) break;
-//        filename = directory.fileName();  //.kbv
 #else
     File file;
     File directory = SD.open(directoryName);
@@ -98,13 +104,17 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
     while (file = directory.openNextFile()) {
 #endif
         filename = (char*)file.name();
-                Serial.println(filename);
         if (isAnimationFile(filename)) {
             numberOfFiles++;
             if (displayFilenames) {
-                Serial.println(filename);
+                Serial.print(numberOfFiles);
+                Serial.print(":");
+                Serial.print(filename);
+                Serial.print("    size:");
+                Serial.println(file.size());
             }
         }
+        else Serial.println(filename);
         file.close();
     }
 
@@ -126,14 +136,13 @@ void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer)
     if ((index < 0) || (index >= numberOfFiles))
         return;
 
-#ifdef USE_SPIFFS
+#ifdef USE_SPIFFS_DIR
     Dir directory = SPIFFS.openDir(directoryName);
     //    if (!directory) return;
 
     while (directory.next() && (index >= 0)) {
         file = directory.openFile("r");
         if (!file) break;
-//        filename = directory.fileName();  //.kbv
 #else
     File directory = SD.open(directoryName);
     if (!directory) {
