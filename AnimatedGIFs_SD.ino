@@ -5,7 +5,7 @@
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
 #endif
 #include "GifDecoder.h"
-#include "FilenameFunctions.h"
+#include "FilenameFunctions.h"    //defines USE_SPIFFS
 
 #define DISPLAY_TIME_SECONDS 80
 #define GIFWIDTH 480 //228 fails on COW_PAINT
@@ -102,16 +102,17 @@ typedef struct {
 gif_detail_t gifs[] = {
 
     M0(teakettle_128x128x10_gif),  // 21155
-    //    M0(llama_driver_gif),          //758945
-    M0(horse_128x96x8_gif),        //  7868
     M0(globe_rotating_gif),        // 90533
     M0(bottom_128x128x17_gif),     // 51775
     M0(irish_cows_green_beer_gif), // 29798
-    //    M0(cliff_100x100_gif),   //406564
-#if defined(ESP32)
-//    M0(llama_driver_gif),    //758945
-//    M0(marilyn_240x240_gif),       // 40843
+#if !defined(TEENSYDUINO)
+    M0(horse_128x96x8_gif),        //  7868
 #endif
+#if defined(ESP32)
+    M0(llama_driver_gif),    //758945
+#endif
+    //    M0(marilyn_240x240_gif),       // 40843
+    //    M0(cliff_100x100_gif),   //406564
 };
 
 const uint8_t *g_gif;
