@@ -7,9 +7,11 @@
 #include "GifDecoder.h"
 #include "FilenameFunctions.h"    //defines USE_SPIFFS
 
-#define DISPLAY_TIME_SECONDS 80
-#define GIFWIDTH 480 //228 fails on COW_PAINT
+#define GIF_REPEATS   3
 
+#define DISPLAY_TIME_SECONDS 80
+#define GIFWIDTH  320 //228 fails on COW_PAINT
+#define GIFHEIGHT 240 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
 
     The lzwMaxBits value of 12 supports all GIFs, but uses 16kB RAM
@@ -17,65 +19,29 @@
     All 32x32-pixel GIFs tested work with 11, most work with 10
 */
 
-GifDecoder<GIFWIDTH, 320, 12> decoder;
+GifDecoder<GIFWIDTH, GIFHEIGHT, 12> decoder;
 
-#if defined(USE_SPIFFS)
-#define GIF_DIRECTORY "/"     //ESP8266 SPIFFS
-#define DISKCOLOUR   CYAN
-#else
 #define GIF_DIRECTORY "/gifs"
-//#define GIF_DIRECTORY "/gifs32"
-//#define GIF_DIRECTORY "/gifsdbg"
-#define DISKCOLOUR   BLUE
-#endif
 
-#if defined(ESP32)
-#define SD_CS 17
-#include <SPI.h>
-#include <TFT_eSPI.h>
-TFT_eSPI tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(ESP8266)
-#define SD_CS D4
-#include <SPI.h>
-#include <TFT_eSPI.h>
-#include <FS.h>
-TFT_eSPI tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(_TEENSYDUINO) || defined(_ARDUINO_NUCLEO_L476RG)
-#define SD_CS 4
-#include <SPI.h>
-#include <ILI9341_kbv.h>
-ILI9341_kbv tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColors(&x, 1, first)
-#define PUSHCOLORS(buf, n) tft.pushColors(buf, n, first)
-#elif defined(_TEENSYDUINO)
-#define SD_CS 4
-#include <SPI.h>
-#include <Adafruit_ST7735.h>
-Adafruit_ST7735 tft(10, 9, 8);
-#define color565 Color565
-#define TFTBEGIN() tft.initR(INITR_BLACKTAB)
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(ARDUINO_SAM_DUE)
-#define SD_CS 4
-#include <SPI.h>
-#include <ILI9341_due.h>
-ILI9341_due tft(10, 9, 8);
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#else
-// Chip select for SD card on the SmartMatrix Shield or Photon
-#define SD_CS SS
-#include <MCUFRIEND_kbv.h>
-MCUFRIEND_kbv tft;
-#define TFTBEGIN() tft.begin(tft.readID())
-#define PUSHCOLOR(x) tft.pushColors(&(x), 1, first)
-#define PUSHCOLORS(buf, n) tft.pushColors(buf, n, first)
-#endif
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+
+#define TFT_D0        34 // Data bit 0 pin (MUST be on PORT byte boundary)
+#define TFT_WR        26 // Write-strobe pin (CCL-inverted timer output)
+#define TFT_DC        10 // Data/command pin
+#define TFT_CS        11 // Chip-select pin
+#define TFT_RST       24 // Reset pin
+#define TFT_RD         9 // Read-strobe pin
+#define TFT_BACKLIGHT 25
+#define SD_CS         32
+// ILI9341 with 8-bit parallel interface:
+Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
+#define TFTBEGIN()    { tft.begin(); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
+#define PUSHCOLOR(x)           tft.pushColor(x)
+#define PUSHCOLORS(x, y)       tft.writePixels(x, y)
+#define DISKCOLOUR             BLUE 
+
+int16_t  gif_offset_x, gif_offset_y;
 
 // Assign human-readable names to some common 16-bit color values:
 #define BLACK   0x0000
@@ -164,7 +130,10 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
     uint8_t pixel;
     bool first;
+    x += gif_offset_x;
+    y += gif_offset_y;
     if (y >= tft.height() || x >= tft.width() ) return;
+    
     if (x + w > tft.width()) w = tft.width() - x;
     if (w <= 0) return;
     int16_t endx = x + w - 1;
@@ -177,13 +146,15 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             buf565[n++] = palette[pixel];
         }
         if (n) {
-            tft.setAddrWindow(x + i - n, y, endx, y);
+            tft.startWrite(); // Start SPI (regardless of transact)
+            tft.setAddrWindow(x + i - n, y, w, 1);
             first = true;
 #ifdef PUSHCOLORS
             PUSHCOLORS(buf565, n);
 #else
             for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
 #endif
+            tft.endWrite();
         }
     }
 }
@@ -248,7 +219,7 @@ void loop() {
     //    int index = random(num_files);
     static int index = -1;
 
-    if (futureTime < millis() || decoder.getCycleNo() > 1) {
+    if (futureTime < millis() || decoder.getCycleNo() > GIF_REPEATS) {
         char buf[80];
         int32_t now = millis();
         int32_t frames = decoder.getFrameCount();
@@ -268,11 +239,25 @@ void loop() {
         if (g_gif) good = (openGifFilenameByIndex_P(GIF_DIRECTORY, index) >= 0);
         else good = (openGifFilenameByIndex(GIF_DIRECTORY, index) >= 0);
         if (good >= 0) {
-            tft.fillScreen(g_gif ? MAGENTA : DISKCOLOUR);
-            tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
-            tft.fillRect(278, 0, 1, tft.height(), WHITE);
+            tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
+            //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
+            //tft.fillRect(278, 0, 1, tft.height(), WHITE);
 
             decoder.startDecoding();
+
+            uint16_t w, h;
+            decoder.getSize(&w, &h);
+            Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
+            if (w < tft.width()) {
+              gif_offset_x = (tft.width() - w) / 2;
+            } else {
+              gif_offset_x = 0;
+            }
+            if (h < tft.height()) {
+              gif_offset_y = (tft.height() - h) / 2;
+            } else {
+              gif_offset_y = 0;
+            }
 
             // Calculate time in the future to terminate animation
             futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
@@ -347,6 +332,3 @@ void loop() {
       decrease refreshRate in setup() to 90 or lower to get good an accurate GIF frame rate
     - Set the chip select pin for your board.  On Teensy 3.5/3.6, the onboard microSD CS pin is "BUILTIN_SDCARD"
 */
-
-
-

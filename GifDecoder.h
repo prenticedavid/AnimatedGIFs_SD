@@ -36,6 +36,7 @@ public:
     int getCycleTime(void) { return cycleTime; }  //.kbv
     int getCycleNo(void) { return cycleNo; }  //.kbv
     int getFrameCount(void) { return frameCount; }  //.kbv
+    void getSize(uint16_t *w, uint16_t *h) { *w = lsdWidth; *h = lsdHeight; }
     
     void setScreenClearCallback(callback f);
     void setUpdateScreenCallback(callback f);
@@ -169,4 +170,3 @@ private:
 #include "LzwDecoder_Impl.h"
 
 #endif
-
