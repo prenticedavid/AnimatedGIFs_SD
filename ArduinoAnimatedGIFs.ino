@@ -1,17 +1,19 @@
 // please read credits at the bottom of file
 
-//#include <SD.h>
 #ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
 #endif
 #include "GifDecoder.h"
 #include "FilenameFunctions.h"    //defines USE_SPIFFS
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
 
-#define GIF_REPEATS   3
+#define DISPLAY_TIME_SECONDS     10        // show for N seconds before continuing to next gif
+#define MAX_GIFWIDTH            320        //228 fails on COW_PAINT
+#define MAX_GIFHEIGHT           240 
+#define GIF_DIRECTORY           "/gifs"    // on SD or QSPI
+const uint8_t *g_gif;
 
-#define DISPLAY_TIME_SECONDS 80
-#define GIFWIDTH  320 //228 fails on COW_PAINT
-#define GIFHEIGHT 240 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
 
     The lzwMaxBits value of 12 supports all GIFs, but uses 16kB RAM
@@ -19,13 +21,9 @@
     All 32x32-pixel GIFs tested work with 11, most work with 10
 */
 
-GifDecoder<GIFWIDTH, GIFHEIGHT, 12> decoder;
+GifDecoder<MAX_GIFWIDTH, MAX_GIFHEIGHT, 12> decoder;
 
-#define GIF_DIRECTORY "/gifs"
-
-#include "Adafruit_GFX.h"
-#include "Adafruit_ILI9341.h"
-
+/*************** Display setup */
 #define TFT_D0        34 // Data bit 0 pin (MUST be on PORT byte boundary)
 #define TFT_WR        26 // Write-strobe pin (CCL-inverted timer output)
 #define TFT_DC        10 // Data/command pin
@@ -39,7 +37,9 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TF
 #define TFTBEGIN()    { tft.begin(); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
 #define PUSHCOLOR(x)           tft.pushColor(x)
 #define PUSHCOLORS(x, y)       tft.writePixels(x, y)
-#define DISKCOLOUR             BLUE 
+#define DISKCOLOUR             BLACK   // background color 
+
+/*************** Display setup */
 
 int16_t  gif_offset_x, gif_offset_y;
 
@@ -81,7 +81,124 @@ gif_detail_t gifs[] = {
     //    M0(cliff_100x100_gif),   //406564
 };
 
-const uint8_t *g_gif;
+
+// Setup method runs once, when the sketch starts
+void setup() {
+    decoder.setScreenClearCallback(screenClearCallback);
+    decoder.setUpdateScreenCallback(updateScreenCallback);
+    decoder.setDrawPixelCallback(drawPixelCallback);
+    decoder.setDrawLineCallback(drawLineCallback);
+
+    decoder.setFileSeekCallback(fileSeekCallback);
+    decoder.setFilePositionCallback(filePositionCallback);
+    decoder.setFileReadCallback(fileReadCallback);
+    decoder.setFileReadBlockCallback(fileReadBlockCallback);
+
+    Serial.begin(115200);
+    //while (!Serial); delay(100);
+    Serial.println("Animated GIFs Demo");
+
+    // First call begin to mount the filesystem.  Check that it returns true
+    // to make sure the filesystem was mounted.
+    num_files = 0;
+
+    if (initFileSystem(SD_CS) == 0) {
+#ifdef USE_QSPIFS
+      Serial.println("Found QSPI filesystem!");
+#else // SD card
+      Serial.println("Found SD Card!");
+#endif
+      num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
+    }
+    if (num_files <= 0) {
+      Serial.println("No QSPI or SD files found, using built-in demos");
+      decoder.setFileSeekCallback(fileSeekCallback_P);
+      decoder.setFilePositionCallback(filePositionCallback_P);
+      decoder.setFileReadCallback(fileReadCallback_P);
+      decoder.setFileReadBlockCallback(fileReadBlockCallback_P);
+      g_gif = gifs[0].data;
+      for (num_files = 0; num_files < sizeof(gifs) / sizeof(*gifs); num_files++) {
+          Serial.println(gifs[num_files].name);
+      }    
+    }
+
+    // Determine how many animated GIF files exist
+    Serial.print("Animated GIF files Found: ");
+    Serial.println(num_files);
+
+    if (num_files < 0) {
+        Serial.println("No gifs directory");
+        while (1);
+    }
+
+    if (!num_files) {
+        Serial.println("Empty gifs directory");
+        while (1);
+    }
+
+    TFTBEGIN();
+#ifdef _ILI9341_dueH_
+    tft.setRotation((iliRotation)1);
+#else
+    tft.setRotation(1);
+#endif
+    tft.fillScreen(BLACK);
+}
+
+uint32_t futureTime, cycle_start;
+int file_index = -1;
+
+void loop() {
+    if (futureTime < millis()) {
+        char buf[80];
+        int32_t now = millis();
+        int32_t frames = decoder.getFrameCount();
+        int32_t cycle_design = decoder.getCycleTime();
+        int32_t cycle_time = now - cycle_start;
+        int32_t percent = (100 * cycle_design) / cycle_time;
+        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
+                frames, cycle_design, cycle_time, percent);
+        Serial.println(buf);
+        cycle_start = now;
+        //        num_files = 2;
+        if (++file_index >= num_files) {
+            file_index = 0;
+        }
+
+        int good;
+        if (g_gif) good = (openGifFilenameByIndex_P(GIF_DIRECTORY, file_index) >= 0);
+        else good = (openGifFilenameByIndex(GIF_DIRECTORY, file_index) >= 0);
+        if (good >= 0) {
+            tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
+            //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
+            //tft.fillRect(278, 0, 1, tft.height(), WHITE);
+
+            decoder.startDecoding();
+
+            uint16_t w, h;
+            decoder.getSize(&w, &h);
+            Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
+            if (w < tft.width()) {
+              gif_offset_x = (tft.width() - w) / 2;
+            } else {
+              gif_offset_x = 0;
+            }
+            if (h < tft.height()) {
+              gif_offset_y = (tft.height() - h) / 2;
+            } else {
+              gif_offset_y = 0;
+            }
+
+            // Calculate time in the future to terminate animation
+            futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
+        }
+    }
+
+    decoder.decodeFrame();
+}
+
+/******************************* File or Memory Functions */
+
 uint32_t g_seek;
 bool fileSeekCallback_P(unsigned long position) {
     g_seek = position;
@@ -102,10 +219,6 @@ int fileReadBlockCallback_P(void * buffer, int numberOfBytes) {
     return numberOfBytes; //.kbv
 }
 
-void screenClearCallback(void) {
-    //    tft.fillRect(0, 0, 128, 128, 0x0000);
-}
-
 bool openGifFilenameByIndex_P(const char *dirname, int index)
 {
     gif_detail_t *g = &gifs[index];
@@ -119,8 +232,16 @@ bool openGifFilenameByIndex_P(const char *dirname, int index)
 
     return index < num_files;
 }
+
+
+/******************************* Drawing functions */
+
 void updateScreenCallback(void) {
     ;
+}
+
+void screenClearCallback(void) {
+    //    tft.fillRect(0, 0, 128, 128, 0x0000);
 }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
@@ -159,113 +280,6 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     }
 }
 
-// Setup method runs once, when the sketch starts
-void setup() {
-    decoder.setScreenClearCallback(screenClearCallback);
-    decoder.setUpdateScreenCallback(updateScreenCallback);
-    decoder.setDrawPixelCallback(drawPixelCallback);
-    decoder.setDrawLineCallback(drawLineCallback);
-
-    decoder.setFileSeekCallback(fileSeekCallback);
-    decoder.setFilePositionCallback(filePositionCallback);
-    decoder.setFileReadCallback(fileReadCallback);
-    decoder.setFileReadBlockCallback(fileReadBlockCallback);
-
-    Serial.begin(115200);
-    Serial.println("AnimatedGIFs_SD");
-    if (initSdCard(SD_CS) < 0) {
-        Serial.println("No SD card");
-        decoder.setFileSeekCallback(fileSeekCallback_P);
-        decoder.setFilePositionCallback(filePositionCallback_P);
-        decoder.setFileReadCallback(fileReadCallback_P);
-        decoder.setFileReadBlockCallback(fileReadBlockCallback_P);
-        g_gif = gifs[0].data;
-        for (num_files = 0; num_files < sizeof(gifs) / sizeof(*gifs); num_files++) {
-            Serial.println(gifs[num_files].name);
-        }
-        //        while (1);
-    }
-    else {
-        num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
-    }
-
-    // Determine how many animated GIF files exist
-    Serial.print("Animated GIF files Found: ");
-    Serial.println(num_files);
-
-    if (num_files < 0) {
-        Serial.println("No gifs directory");
-        while (1);
-    }
-
-    if (!num_files) {
-        Serial.println("Empty gifs directory");
-        while (1);
-    }
-
-    TFTBEGIN();
-#ifdef _ILI9341_dueH_
-    tft.setRotation((iliRotation)1);
-#else
-    tft.setRotation(1);
-#endif
-    tft.fillScreen(BLACK);
-}
-
-
-void loop() {
-    static unsigned long futureTime, cycle_start;
-
-    //    int index = random(num_files);
-    static int index = -1;
-
-    if (futureTime < millis() || decoder.getCycleNo() > GIF_REPEATS) {
-        char buf[80];
-        int32_t now = millis();
-        int32_t frames = decoder.getFrameCount();
-        int32_t cycle_design = decoder.getCycleTime();
-        int32_t cycle_time = now - cycle_start;
-        int32_t percent = (100 * cycle_design) / cycle_time;
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
-                frames, cycle_design, cycle_time, percent);
-        Serial.println(buf);
-        cycle_start = now;
-        //        num_files = 2;
-        if (++index >= num_files) {
-            index = 0;
-        }
-
-        int good;
-        if (g_gif) good = (openGifFilenameByIndex_P(GIF_DIRECTORY, index) >= 0);
-        else good = (openGifFilenameByIndex(GIF_DIRECTORY, index) >= 0);
-        if (good >= 0) {
-            tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
-            //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
-            //tft.fillRect(278, 0, 1, tft.height(), WHITE);
-
-            decoder.startDecoding();
-
-            uint16_t w, h;
-            decoder.getSize(&w, &h);
-            Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
-            if (w < tft.width()) {
-              gif_offset_x = (tft.width() - w) / 2;
-            } else {
-              gif_offset_x = 0;
-            }
-            if (h < tft.height()) {
-              gif_offset_y = (tft.height() - h) / 2;
-            } else {
-              gif_offset_y = 0;
-            }
-
-            // Calculate time in the future to terminate animation
-            futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
-        }
-    }
-
-    decoder.decodeFrame();
-}
 
 /*
     Animated GIFs Display Code for SmartMatrix and 32x32 RGB LED Panels

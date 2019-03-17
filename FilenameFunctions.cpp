@@ -9,21 +9,28 @@
 #include "FilenameFunctions.h"    //defines USE_SPIFFS as reqd
 
 #if defined (ARDUINO)
-#ifdef USE_SPIFFS
-#if defined(ESP8266)
-#include "FS.h"
-#define USE_SPIFFS_DIR
-#elif defined(ESP32)
-#include <SPIFFS.h>
-#define SD SPIFFS
-#else
-#error USE_SPIFFS only valid on Expressif controllers
-#endif
-#else
-#include <SD.h>
-#endif
+  #if defined(USE_SPIFFS)
+    #if defined(ESP8266)
+      #include "FS.h"
+      #define USE_SPIFFS_DIR
+    #elif defined(ESP32)
+      #include <SPIFFS.h>
+      #define SD SPIFFS
+    #else
+      #error USE_SPIFFS only valid on Expressif controllers
+    #endif
+  #elif defined(USE_QSPIFS)
+    #include <Adafruit_SPIFlash.h>
+    #include <Adafruit_SPIFlash_FatFs.h>
+    #include "Adafruit_QSPI_GD25Q.h"
+    #define FLASH_TYPE     SPIFLASHTYPE_W25Q64 // Flash chip type.
+    Adafruit_QSPI_GD25Q    flash;
+    Adafruit_M0_Express_CircuitPython pythonfs(flash);
+  #else
+    #include <SD.h>
+  #endif
 #elif defined (SPARK)
-#include "sd-card-library-photon-compat/sd-card-library-photon-compat.h"
+  #include "sd-card-library-photon-compat/sd-card-library-photon-compat.h"
 #endif
 
 File file;
@@ -50,12 +57,22 @@ int fileReadBlockCallback(void * buffer, int numberOfBytes) {
     return file.read((uint8_t*)buffer, numberOfBytes); //.kbv
 }
 
-int initSdCard(int chipSelectPin) {
+int initFileSystem(int chipSelectPin) {
     // initialize the SD card at full speed
     pinMode(chipSelectPin, OUTPUT);
-#ifdef USE_SPIFFS
+#if defined(USE_SPIFFS)
     if (!SPIFFS.begin())
         return -1;
+#elif defined(USE_QSPIFS)
+    // Initialize flash library and check its chip ID.
+    if (!flash.begin()) {
+      Serial.println("Error, failed to initialize flash chip!");
+      return -1;
+    }
+    flash.setFlashType(FLASH_TYPE);
+    if (!pythonfs.begin()) {
+      return -1;
+    }
 #else
     if (!SD.begin(chipSelectPin))
         return -1;
@@ -86,7 +103,7 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
 
     char *filename;
     numberOfFiles = 0;
-#ifdef USE_SPIFFS_DIR
+#if defined(USE_SPIFFS_DIR)
     File file;
     Dir directory = SPIFFS.openDir(directoryName);
     //    if (!directory == 0) return -1;
@@ -95,8 +112,12 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
         file = directory.openFile("r");
         if (!file) break;
 #else
-    File file;
+  #if defined(USE_QSPIFS)
+    File directory = pythonfs.open(directoryName);
+  #else
     File directory = SD.open(directoryName);
+  #endif
+    File file;
     if (!directory) {
         return -1;
     }
@@ -136,7 +157,7 @@ void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer)
     if ((index < 0) || (index >= numberOfFiles))
         return;
 
-#ifdef USE_SPIFFS_DIR
+#if defined(USE_SPIFFS)
     Dir directory = SPIFFS.openDir(directoryName);
     //    if (!directory) return;
 
@@ -144,7 +165,11 @@ void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer)
         file = directory.openFile("r");
         if (!file) break;
 #else
+  #if defined(USE_QSPIFS)
+    File directory = pythonfs.open(directoryName);
+  #else
     File directory = SD.open(directoryName);
+  #endif
     if (!directory) {
         return;
     }
@@ -192,8 +217,10 @@ int openGifFilenameByIndex(const char *directoryName, int index) {
         file.close();
 
     // Attempt to open the file for reading
-#ifdef USE_SPIFFS
+#if defined(USE_SPIFFS)
     file = SPIFFS.open(pathname, "r");
+#elif defined(USE_QSPIFS)
+    file = pythonfs.open(pathname, FILE_READ);
 #else
     file = SD.open(pathname);
 #endif
@@ -212,4 +239,3 @@ void chooseRandomGIFFilename(const char *directoryName, char *pnBuffer) {
     int index = random(numberOfFiles);
     getGIFFilenameByIndex(directoryName, index, pnBuffer);
 }
-
