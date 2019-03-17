@@ -259,6 +259,8 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     if (w <= 0) return;
     int16_t endx = x + w - 1;
     uint16_t buf565[w];
+    tft.startWrite(); // Start SPI (regardless of transact)
+    tft.setAddrWindow(x, y, w, 1);
     for (int i = 0; i < w; ) {
         int n = 0;
         while (i < w) {
@@ -267,17 +269,15 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             buf565[n++] = palette[pixel];
         }
         if (n) {
-            tft.startWrite(); // Start SPI (regardless of transact)
-            tft.setAddrWindow(x + i - n, y, w, 1);
             first = true;
 #ifdef PUSHCOLORS
             PUSHCOLORS(buf565, n);
 #else
             for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
 #endif
-            tft.endWrite();
         }
     }
+    tft.endWrite();
 }
 
 
