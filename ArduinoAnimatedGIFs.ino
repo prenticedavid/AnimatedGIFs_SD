@@ -140,11 +140,7 @@ void setup() {
     }
 
     TFTBEGIN();
-#ifdef _ILI9341_dueH_
-    tft.setRotation((iliRotation)1);
-#else
-    tft.setRotation(1);
-#endif
+    tft.setRotation(3);
     tft.fillScreen(BLUE);
 }
 
