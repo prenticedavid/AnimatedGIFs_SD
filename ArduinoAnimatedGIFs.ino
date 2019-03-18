@@ -37,7 +37,7 @@ GifDecoder<MAX_GIFWIDTH, MAX_GIFHEIGHT, 12> decoder;
 Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
 #define TFTBEGIN()    { tft.begin(); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
 #define PUSHCOLOR(x)           tft.pushColor(x)
-#define PUSHCOLORS(x, y)       tft.writePixels(x, y)
+#define PUSHCOLORS(x, y)       tft.writePixels(x, y, false)
 #define DISKCOLOUR             BLACK   // background color 
 
 uint32_t timeSpentDrawing, timeSpentFS;
@@ -284,8 +284,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             }
             tft.setAddrWindow(x + startColumn, y, n, 1);
 #ifdef PUSHCOLORS
-//          PUSHCOLORS(buf565, n);
-            tft.writePixels(buf565, n);
+            PUSHCOLORS(buf565, n);
 #else
             for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
 #endif
