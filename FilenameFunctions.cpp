@@ -37,12 +37,18 @@ File file;
 
 int numberOfFiles;
 
+extern uint32_t timeSpentFS;
+
 bool fileSeekCallback(unsigned long position) {
+  bool r;
+  uint32_t t = millis();
 #ifdef USE_SPIFFS
-    return file.seek(position, SeekSet);
+    r = file.seek(position, SeekSet);
 #else
-    return file.seek(position);
+    r = file.seek(position);
 #endif
+  timeSpentFS += millis() - t;
+  return r;
 }
 
 unsigned long filePositionCallback(void) {
@@ -54,7 +60,10 @@ int fileReadCallback(void) {
 }
 
 int fileReadBlockCallback(void * buffer, int numberOfBytes) {
-    return file.read((uint8_t*)buffer, numberOfBytes); //.kbv
+    uint32_t t = millis();
+    int r = file.read((uint8_t*)buffer, numberOfBytes); //.kbv
+    timeSpentFS += millis() - t;
+    return r;
 }
 
 int initFileSystem(int chipSelectPin) {

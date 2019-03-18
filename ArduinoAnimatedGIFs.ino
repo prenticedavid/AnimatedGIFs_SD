@@ -32,12 +32,15 @@ GifDecoder<MAX_GIFWIDTH, MAX_GIFHEIGHT, 12> decoder;
 #define TFT_RD         9 // Read-strobe pin
 #define TFT_BACKLIGHT 25
 #define SD_CS         32
+
 // ILI9341 with 8-bit parallel interface:
 Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
 #define TFTBEGIN()    { tft.begin(); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
 #define PUSHCOLOR(x)           tft.pushColor(x)
 #define PUSHCOLORS(x, y)       tft.writePixels(x, y)
 #define DISKCOLOUR             BLACK   // background color 
+
+uint32_t timeSpentDrawing, timeSpentFS;
 
 /*************** Display setup */
 
@@ -149,15 +152,16 @@ uint32_t futureTime, cycle_start;
 int file_index = -1;
 
 void loop() {
-    if (futureTime < millis()) {
+
+    if ((futureTime < millis() && (decoder.getCycleNo() > 1))) {  // at least one 'cycle'
         char buf[80];
         int32_t now = millis();
         int32_t frames = decoder.getFrameCount();
         int32_t cycle_design = decoder.getCycleTime();
         int32_t cycle_time = now - cycle_start;
         int32_t percent = (100 * cycle_design) / cycle_time;
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
-                frames, cycle_design, cycle_time, percent);
+        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%% Spent %d ms on drawing, %d ms on filesys",
+                frames, cycle_design, cycle_time, percent, timeSpentDrawing, timeSpentFS);
         Serial.println(buf);
         cycle_start = now;
         //        num_files = 2;
@@ -166,32 +170,37 @@ void loop() {
         }
 
         int good;
-        if (g_gif) good = (openGifFilenameByIndex_P(GIF_DIRECTORY, file_index) >= 0);
-        else good = (openGifFilenameByIndex(GIF_DIRECTORY, file_index) >= 0);
-        if (good >= 0) {
-            tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
-            //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
-            //tft.fillRect(278, 0, 1, tft.height(), WHITE);
-
-            decoder.startDecoding();
-
-            uint16_t w, h;
-            decoder.getSize(&w, &h);
-            Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
-            if (w < tft.width()) {
-              gif_offset_x = (tft.width() - w) / 2;
-            } else {
-              gif_offset_x = 0;
-            }
-            if (h < tft.height()) {
-              gif_offset_y = (tft.height() - h) / 2;
-            } else {
-              gif_offset_y = 0;
-            }
-
-            // Calculate time in the future to terminate animation
-            futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
+        if (g_gif) {
+          good = (openGifFilenameByIndex_P(GIF_DIRECTORY, file_index) >= 0);
+        } else {
+          good = (openGifFilenameByIndex(GIF_DIRECTORY, file_index) >= 0);
         }
+        if (good < 0) {
+          return;
+        }
+        timeSpentFS = timeSpentDrawing = 0;
+        tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
+        //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
+        //tft.fillRect(278, 0, 1, tft.height(), WHITE);
+
+        decoder.startDecoding();
+
+        uint16_t w, h;
+        decoder.getSize(&w, &h);
+        Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
+        if (w < tft.width()) {
+          gif_offset_x = (tft.width() - w) / 2;
+        } else {
+          gif_offset_x = 0;
+        }
+        if (h < tft.height()) {
+          gif_offset_y = (tft.height() - h) / 2;
+        } else {
+          gif_offset_y = 0;
+        }
+
+        // Calculate time in the future to terminate animation
+        futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
     }
 
     decoder.decodeFrame();
@@ -259,6 +268,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     if (w <= 0) return;
     int16_t endx = x + w - 1;
     uint16_t buf565[w];
+    uint32_t t = millis();
     for (int i = 0; i < w; ) {
         int n = 0;
         while (i < w) {
@@ -278,6 +288,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             tft.endWrite();
         }
     }
+    timeSpentDrawing += millis() - t;
 }
 
 
