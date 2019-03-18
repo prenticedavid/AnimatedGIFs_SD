@@ -145,7 +145,7 @@ void setup() {
 #else
     tft.setRotation(1);
 #endif
-    tft.fillScreen(BLACK);
+    tft.fillScreen(BLUE);
 }
 
 uint32_t futureTime, cycle_start;
@@ -179,10 +179,9 @@ void loop() {
           return;
         }
         timeSpentFS = timeSpentDrawing = 0;
-        tft.fillScreen(g_gif ? BLACK : DISKCOLOUR);
-        //tft.fillRect(GIFWIDTH, 0, 1, tft.height(), WHITE);
-        //tft.fillRect(278, 0, 1, tft.height(), WHITE);
-
+        tft.dmaWait();
+        tft.endWrite();   // End transaction from any prior callback
+        tft.fillScreen(BLACK);
         decoder.startDecoding();
 
         uint16_t w, h;
