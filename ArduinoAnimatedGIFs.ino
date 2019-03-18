@@ -285,7 +285,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             tft.setAddrWindow(x + startColumn, y, n, 1);
 #ifdef PUSHCOLORS
 //          PUSHCOLORS(buf565, n);
-            tft.writePixels(buf565, n, true);
+            tft.writePixels(buf565, n);
 #else
             for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
 #endif
