@@ -259,7 +259,6 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
     uint8_t pixel;
-    bool first;
     x += gif_offset_x;
     y += gif_offset_y;
     if (y >= tft.height() || x >= tft.width() ) return;
@@ -268,27 +267,30 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     if (w <= 0) return;
     int16_t endx = x + w - 1;
     uint16_t buf565[w];
-    uint32_t t = millis();
-    tft.startWrite(); // Start SPI (regardless of transact)
-    tft.setAddrWindow(x, y, w, 1);
+    bool first = true; // First write op on this line?
+
     for (int i = 0; i < w; ) {
-        int n = 0;
-        while (i < w) {
-            pixel = buf[i++];
-            if (pixel == skip) break;
+        int n = 0, startColumn = i;
+        // Handle opaque span of pixels (stop at end of line or first transparent pixel)
+        while((i < w) && ((pixel = buf[i++]) != skip)) {
             buf565[n++] = palette[pixel];
         }
         if (n) {
-            first = true;
+            tft.dmaWait(); // Wait for prior DMA transfer to complete
+            if (first) {
+              tft.endWrite();   // End transaction from prior callback
+              tft.startWrite(); // Start new display transaction
+              first = false;
+            }
+            tft.setAddrWindow(x + startColumn, y, n, 1);
 #ifdef PUSHCOLORS
-            PUSHCOLORS(buf565, n);
+//          PUSHCOLORS(buf565, n);
+            tft.writePixels(buf565, n, true);
 #else
             for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
 #endif
         }
     }
-    timeSpentDrawing += millis() - t;
-    tft.endWrite();
 }
 
 
