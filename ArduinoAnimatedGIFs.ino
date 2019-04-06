@@ -254,6 +254,7 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
     uint8_t pixel;
+    uint32_t t = millis();
     x += gif_offset_x;
     y += gif_offset_y;
     if (y >= tft.height() || x >= tft.width() ) return;
@@ -285,6 +286,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
 #endif
         }
     }
+    timeSpentDrawing += millis() - t;
 }
 
 
