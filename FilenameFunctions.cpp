@@ -68,7 +68,9 @@ int fileReadBlockCallback(void * buffer, int numberOfBytes) {
 
 int initFileSystem(int chipSelectPin) {
     // initialize the SD card at full speed
-    pinMode(chipSelectPin, OUTPUT);
+    if (chipSelectPin >= 0) {
+      pinMode(chipSelectPin, OUTPUT);
+    }
 #if defined(USE_SPIFFS)
     if (!SPIFFS.begin())
         return -1;
