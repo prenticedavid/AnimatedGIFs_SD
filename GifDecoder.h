@@ -106,7 +106,7 @@ private:
     int frameCount; //.kbv
 //    int frameSize; //.kbv
 
-    unsigned long nextFrameTime_ms;
+    uint32_t frameStartTime;
 
     int colorCount;
     rgb_24 palette[256];

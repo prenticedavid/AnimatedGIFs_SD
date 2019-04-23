@@ -174,10 +174,11 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
         for (int i = 0; i < 256; i++) {
-            uint8_t r = palette[i].red;
-            uint8_t g = palette[i].green;
-            uint8_t b = palette[i].blue;
-            palette565[i] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
+            // Pre-endian-swap in the palette
+            palette565[i] = __builtin_bswap16(
+              ((palette[i].red   & 0xF8) << 8) |
+              ((palette[i].green & 0xFC) << 3) |
+              ((palette[i].blue        ) >> 3));
         }
     }
 #endif
@@ -321,7 +322,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseGraphicControlExten
     }
 
     int packedBits = readByte();
-    frameDelay = readWord();
+    frameDelay = readWord(); // hundredths of a second
     transparentColorIndex = readByte();
 
     if ((packedBits & TRANSPARENTFLAG) == 0) {
@@ -607,9 +608,9 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
     lzw_setTempBuffer((uint8_t*)tempBuffer);
 
     // Make sure there is at least some delay between frames
-    if (frameDelay < 1) {
-        frameDelay = 1;
-    }
+//    if (frameDelay < 1) {
+//        frameDelay = 1;
+//    }
 
     // Decompress LZW data and display the frame
     decompressAndDisplayFrame(filePositionAfter);
@@ -622,8 +623,8 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
 // Parse gif data
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseData() {
-    if (nextFrameTime_ms > millis())
-        return ERROR_WAITING;
+//    if (nextFrameTime_ms > millis())
+//        return ERROR_WAITING;
 
 #if GIFDEBUG == 1 && DEBUG_PARSING_DATA == 1
     Serial.println("\nParsing Data Block");
@@ -700,10 +701,9 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
     // Initialize variables
     keyFrame = true;
     cycleNo = 0;
-    cycleTime = 0;
     prevDisposalMethod = DISPOSAL_NONE;
     transparentColorIndex = NO_TRANSPARENT_INDEX;
-    nextFrameTime_ms = 0;
+    frameStartTime = 0;
     fileSeekCallback(0);
 
     // Validate the header
@@ -739,7 +739,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
         keyFrame = true;
         prevDisposalMethod = DISPOSAL_NONE;
         transparentColorIndex = NO_TRANSPARENT_INDEX;
-        nextFrameTime_ms = 0;
+        frameStartTime = 0;
         fileSeekCallback(0);
 
         // parse Gif Header like with a new file
@@ -758,6 +758,10 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
 // Decompress LZW data and display animation frame
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFrame(unsigned long filePositionAfter) {
+
+    // frameDelay is time to wait AFTER the frame is drawn...so, use value
+    // from prior pass. It's converted to microseconds here for better timing.
+    uint32_t priorFrameDelay = frameDelay * 10000;
 
     // Each pixel of image is 8 bits and is an index into the palette
 
@@ -887,13 +891,12 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     // swapBuffers() call can take up to 1/framerate seconds to return (it waits until a buffer copy is complete)
     // note the time before calling
 
-    // wait until time to display next frame
-    while (nextFrameTime_ms > millis());
-
-    // calculate time to display next frame
-    nextFrameTime_ms = millis() + (10 * frameDelay);
-    cycleTime += 10 * frameDelay;
-    if (updateScreenCallback)
+    // Hold until time to display new frame (see comment at start of function)
+    uint32_t t;
+    while(((t = micros()) - frameStartTime) < priorFrameDelay);
+    cycleTime += frameDelay * 10;
+    if(updateScreenCallback) {
         (*updateScreenCallback)();
+    }
+    frameStartTime = t;
 }
-

@@ -45,7 +45,7 @@ const uint8_t *g_gif;
 #endif
 
 #define PUSHCOLOR(x)           tft.pushColor(x)
-#define PUSHCOLORS(x, y)       tft.writePixels(x, y, false)
+#define PUSHCOLORS(x, y)       tft.writePixels(x, y, false, true)
 #define DISKCOLOUR             BLACK   // background color 
 
 
@@ -162,20 +162,22 @@ void setup() {
     tft.fillScreen(BLUE);
 }
 
-uint32_t futureTime, cycle_start;
+uint32_t fileStartTime = DISPLAY_TIME_SECONDS * -1001;
+uint32_t cycle_start = 0L;
 int file_index = -1;
 
 void loop() {
 
-    if ((futureTime < millis() && (decoder.getCycleNo() > 1))) {  // at least one 'cycle'
+    uint32_t now = millis();
+    if(((now - fileStartTime) > (DISPLAY_TIME_SECONDS * 1000)) &&
+       (decoder.getCycleNo() > 1)) { // at least one 'cycle' elapsed
         char buf[80];
-        int32_t now = millis();
-        int32_t frames = decoder.getFrameCount();
-        int32_t cycle_design = decoder.getCycleTime();
-        int32_t cycle_time = now - cycle_start;
-        int32_t percent = (100 * cycle_design) / cycle_time;
+        int32_t frames       = decoder.getFrameCount();
+        int32_t cycle_design = decoder.getCycleTime();  // Intended duration
+        int32_t cycle_actual = now - cycle_start;       // Actual duration
+        int32_t percent = 100 * cycle_design / cycle_actual;
         sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%% Spent %d ms on drawing, %d ms on filesys",
-                frames, cycle_design, cycle_time, percent, timeSpentDrawing, timeSpentFS);
+                frames, cycle_design, cycle_actual, percent, timeSpentDrawing, timeSpentFS);
         Serial.println(buf);
         cycle_start = now;
         //        num_files = 2;
@@ -212,8 +214,8 @@ void loop() {
           gif_offset_y = 0;
         }
 
-        // Calculate time in the future to terminate animation
-        futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
+        // Note current time for terminating animation later
+        fileStartTime = millis();
     }
 
     decoder.decodeFrame();
@@ -304,6 +306,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
 #endif
         }
     }
+    tft.dmaWait(); // Wait for last DMA transfer to complete
     timeSpentDrawing += millis() - t;
 }
 
