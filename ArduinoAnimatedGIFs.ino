@@ -282,14 +282,17 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     if (x + w > tft.width()) w = tft.width() - x;
     if (w <= 0) return;
     int16_t endx = x + w - 1;
-    uint16_t buf565[w];
+    uint16_t buf565[2][w];
     bool first = true; // First write op on this line?
+    uint8_t bufidx = 0;
+    uint16_t *ptr;
 
     for (int i = 0; i < w; ) {
         int n = 0, startColumn = i;
+        ptr = &buf565[bufidx][0];
         // Handle opaque span of pixels (stop at end of line or first transparent pixel)
         while((i < w) && ((pixel = buf[i++]) != skip)) {
-            buf565[n++] = palette[pixel];
+            ptr[n++] = palette[pixel];
         }
         if (n) {
             tft.dmaWait(); // Wait for prior DMA transfer to complete
@@ -300,10 +303,11 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             }
             tft.setAddrWindow(x + startColumn, y, n, 1);
 #ifdef PUSHCOLORS
-            PUSHCOLORS(buf565, n);
+            PUSHCOLORS(ptr, n);
 #else
-            for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
+            for (int j = 0; j < n; j++) PUSHCOLOR(ptr[j]);
 #endif
+            bufidx = 1 - bufidx;
         }
     }
     tft.dmaWait(); // Wait for last DMA transfer to complete
