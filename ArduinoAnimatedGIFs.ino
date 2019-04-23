@@ -281,7 +281,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     
     if (x + w > tft.width()) w = tft.width() - x;
     if (w <= 0) return;
-    int16_t endx = x + w - 1;
+
     uint16_t buf565[2][w];
     bool first = true; // First write op on this line?
     uint8_t bufidx = 0;
