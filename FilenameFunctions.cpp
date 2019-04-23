@@ -27,7 +27,8 @@
     Adafruit_QSPI_GD25Q    flash;
     Adafruit_M0_Express_CircuitPython pythonfs(flash);
   #else
-    #include <SD.h>
+    #include <SdFat.h>
+    static SdFatEX SD(&SPI);
   #endif
 #elif defined (SPARK)
   #include "sd-card-library-photon-compat/sd-card-library-photon-compat.h"
@@ -112,7 +113,6 @@ bool isAnimationFile(const char filename []) {
 // Enumerate and possibly display the animated GIF filenames in GIFS directory
 int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
 
-    char *filename;
     numberOfFiles = 0;
 #if defined(USE_SPIFFS_DIR)
     File file;
@@ -135,7 +135,14 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
 
     while (file = directory.openNextFile()) {
 #endif
-        filename = (char*)file.name();
+
+#if !defined(USE_QSPIFS)
+        char filename[80];
+        file.getName(filename, 80);
+#else
+        char *filename;
+        filename = file.name();
+#endif
         if (isAnimationFile(filename)) {
             numberOfFiles++;
             if (displayFilenames) {
@@ -162,8 +169,6 @@ int enumerateGIFFiles(const char *directoryName, bool displayFilenames) {
 // Get the full path/filename of the GIF file with specified index
 void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer) {
 
-    char* filename;
-
     // Make sure index is in range
     if ((index < 0) || (index >= numberOfFiles))
         return;
@@ -189,8 +194,13 @@ void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer)
         file = directory.openNextFile();
         if (!file) break;
 #endif
-
-        filename = (char*)file.name();  //.kbv
+#if !defined(USE_QSPIFS)
+        char filename[80];
+        file.getName(filename, 80);
+#else
+        char *filename;
+        filename = file.name();
+#endif
         if (isAnimationFile(filename)) {
             index--;
 
@@ -217,7 +227,7 @@ void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer)
 }
 
 int openGifFilenameByIndex(const char *directoryName, int index) {
-    char pathname[40];
+    char pathname[255];
 
     getGIFFilenameByIndex(directoryName, index, pathname);
 
