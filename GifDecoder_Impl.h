@@ -174,7 +174,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
         for (int i = 0; i < 256; i++) {
-#if defined(ARCADA_TFT_SPI)
+#if !defined(ARCADA_TFT_D0)
             uint8_t r = palette[i].red;
             uint8_t g = palette[i].green;
             uint8_t b = palette[i].blue;
