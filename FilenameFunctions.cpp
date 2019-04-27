@@ -26,6 +26,7 @@
     #define FLASH_TYPE     SPIFLASHTYPE_W25Q64 // Flash chip type.
     Adafruit_QSPI_GD25Q    flash;
     Adafruit_M0_Express_CircuitPython pythonfs(flash);
+    typedef Adafruit_SPIFlash_FAT::File File;
   #else
     #include <SdFat.h>
     static SdFatEX SD(&SPI);

@@ -25,7 +25,7 @@ const uint8_t *g_gif;
   #define TFT_BACKLIGHT 25
   #define SD_CS         32
   // ILI9341 with 8-bit parallel interface:
-  Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
+  Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8bitbus, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
   #define MAX_GIFWIDTH    320        //228 fails on COW_PAINT
   #define MAX_GIFHEIGHT   240 
   #define TFT_ROTATION    3
@@ -37,7 +37,7 @@ const uint8_t *g_gif;
   #define TFT_RST       46
   #define TFT_BACKLIGHT 47
   #define SD_CS         -1
-  Adafruit_ST7735 tft = Adafruit_ST7735(&SPI1, TFT_CS,  TFT_DC, TFT_RST);
+  Adafruit_ST7735 tft = Adafruit_ST7735(&SPI1, TFT_CS, TFT_DC, TFT_RST);
   #define MAX_GIFWIDTH   180
   #define MAX_GIFHEIGHT  128
   #define TFT_ROTATION   1
