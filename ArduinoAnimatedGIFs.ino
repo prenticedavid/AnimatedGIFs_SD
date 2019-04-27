@@ -16,8 +16,8 @@ const uint8_t *g_gif;
 
 Adafruit_Arcada arcada;
 
-#define MAX_GIFWIDTH    320        //228 fails on COW_PAINT
-#define MAX_GIFHEIGHT   240
+#define MAX_GIFWIDTH    ARCADA_TFT_WIDTH       //228 fails on COW_PAINT
+#define MAX_GIFHEIGHT   ARCADA_TFT_HEIGHT
 
 #define DISKCOLOUR             BLACK   // background color 
 
@@ -89,9 +89,7 @@ void setup() {
     decoder.setFileReadBlockCallback(fileReadBlockCallback);
 
     Serial.begin(115200);
-    while (!Serial); delay(100);
     Serial.println("Animated GIFs Demo");
-
 
     // First call begin to mount the filesystem.  Check that it returns true
     // to make sure the filesystem was mounted.
