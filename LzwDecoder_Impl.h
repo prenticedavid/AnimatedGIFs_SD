@@ -178,4 +178,3 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
     end_code = -1;
     return len - l;
 }
-

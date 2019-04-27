@@ -3,49 +3,22 @@
 #ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
 #endif
+
+#include <Adafruit_Arcada.h>
 #include "GifDecoder.h"
 #include "FilenameFunctions.h"    //defines USE_SPIFFS
-#include "Adafruit_GFX.h"
-#include "Adafruit_ILI9341.h"
-#include "Adafruit_ST7735.h"
 
 #define DISPLAY_TIME_SECONDS     10        // show for N seconds before continuing to next gif
 #define GIF_DIRECTORY           "/gifs"    // on SD or QSPI
 const uint8_t *g_gif;
 
 /*************** Display setup */
-#if defined(ADAFRUIT_PYPORTAL)
-  // 8 bit 320x240 TFT
-  #define TFT_D0        34 // Data bit 0 pin (MUST be on PORT byte boundary)
-  #define TFT_WR        26 // Write-strobe pin (CCL-inverted timer output)
-  #define TFT_DC        10 // Data/command pin
-  #define TFT_CS        11 // Chip-select pin
-  #define TFT_RST       24 // Reset pin
-  #define TFT_RD         9 // Read-strobe pin
-  #define TFT_BACKLIGHT 25
-  #define SD_CS         32
-  // ILI9341 with 8-bit parallel interface:
-  Adafruit_ILI9341 tft = Adafruit_ILI9341(tft8bitbus, TFT_D0, TFT_WR, TFT_DC, TFT_CS, TFT_RST, TFT_RD);
-  #define MAX_GIFWIDTH    320        //228 fails on COW_PAINT
-  #define MAX_GIFHEIGHT   240 
-  #define TFT_ROTATION    3
-  #define TFTBEGIN()    { tft.begin(); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
-#elif defined(ADAFRUIT_PYBADGE_M4_EXPRESS)
-  // SPI 128x160 TFT
-  #define TFT_CS        44
-  #define TFT_DC        45
-  #define TFT_RST       46
-  #define TFT_BACKLIGHT 47
-  #define SD_CS         -1
-  Adafruit_ST7735 tft = Adafruit_ST7735(&SPI1, TFT_CS, TFT_DC, TFT_RST);
-  #define MAX_GIFWIDTH   180
-  #define MAX_GIFHEIGHT  128
-  #define TFT_ROTATION   1
-  #define TFTBEGIN()    { tft.initR(INITR_BLACKTAB); pinMode(TFT_BACKLIGHT, OUTPUT); digitalWrite(TFT_BACKLIGHT, HIGH); }
-#endif
 
-#define PUSHCOLOR(x)           tft.pushColor(x)
-#define PUSHCOLORS(x, y)       tft.writePixels(x, y, false, true)
+Adafruit_Arcada arcada;
+
+#define MAX_GIFWIDTH    320        //228 fails on COW_PAINT
+#define MAX_GIFHEIGHT   240
+
 #define DISKCOLOUR             BLACK   // background color 
 
 
@@ -116,19 +89,16 @@ void setup() {
     decoder.setFileReadBlockCallback(fileReadBlockCallback);
 
     Serial.begin(115200);
-    //while (!Serial); delay(100);
+    while (!Serial); delay(100);
     Serial.println("Animated GIFs Demo");
+
 
     // First call begin to mount the filesystem.  Check that it returns true
     // to make sure the filesystem was mounted.
     num_files = 0;
 
-    if (initFileSystem(SD_CS) == 0) {
-#ifdef USE_QSPIFS
-      Serial.println("Found QSPI filesystem!");
-#else // SD card
-      Serial.println("Found SD Card!");
-#endif
+    if (arcada.filesysBegin()) {
+      Serial.println("Found filesystem!");
       num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
     }
     if (num_files <= 0) {
@@ -157,9 +127,9 @@ void setup() {
         while (1);
     }
 
-    TFTBEGIN();
-    tft.setRotation(TFT_ROTATION);
-    tft.fillScreen(BLUE);
+    arcada.displayBegin();
+    arcada.fillScreen(BLUE);
+    arcada.setBacklight(255);
 }
 
 uint32_t fileStartTime = DISPLAY_TIME_SECONDS * -1001;
@@ -195,21 +165,21 @@ void loop() {
           return;
         }
         timeSpentFS = timeSpentDrawing = 0;
-        tft.dmaWait();
-        tft.endWrite();   // End transaction from any prior callback
-        tft.fillScreen(BLACK);
+        arcada.dmaWait();
+        arcada.endWrite();   // End transaction from any prior callback
+        arcada.fillScreen(BLACK);
         decoder.startDecoding();
 
         uint16_t w, h;
         decoder.getSize(&w, &h);
         Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
-        if (w < tft.width()) {
-          gif_offset_x = (tft.width() - w) / 2;
+        if (w < arcada.width()) {
+          gif_offset_x = (arcada.width() - w) / 2;
         } else {
           gif_offset_x = 0;
         }
-        if (h < tft.height()) {
-          gif_offset_y = (tft.height() - h) / 2;
+        if (h < arcada.height()) {
+          gif_offset_y = (arcada.height() - h) / 2;
         } else {
           gif_offset_y = 0;
         }
@@ -265,11 +235,11 @@ void updateScreenCallback(void) {
 }
 
 void screenClearCallback(void) {
-    //    tft.fillRect(0, 0, 128, 128, 0x0000);
+    //    arcada.fillRect(0, 0, 128, 128, 0x0000);
 }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-    tft.drawPixel(x, y, tft.color565(red, green, blue));
+    arcada.drawPixel(x, y, arcada.color565(red, green, blue));
 }
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
@@ -277,9 +247,9 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     uint32_t t = millis();
     x += gif_offset_x;
     y += gif_offset_y;
-    if (y >= tft.height() || x >= tft.width() ) return;
+    if (y >= arcada.height() || x >= arcada.width() ) return;
     
-    if (x + w > tft.width()) w = tft.width() - x;
+    if (x + w > arcada.width()) w = arcada.width() - x;
     if (w <= 0) return;
 
     uint16_t buf565[2][w];
@@ -295,22 +265,18 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             ptr[n++] = palette[pixel];
         }
         if (n) {
-            tft.dmaWait(); // Wait for prior DMA transfer to complete
+            arcada.dmaWait(); // Wait for prior DMA transfer to complete
             if (first) {
-              tft.endWrite();   // End transaction from prior callback
-              tft.startWrite(); // Start new display transaction
+              arcada.endWrite();   // End transaction from prior callback
+              arcada.startWrite(); // Start new display transaction
               first = false;
             }
-            tft.setAddrWindow(x + startColumn, y, n, 1);
-#ifdef PUSHCOLORS
-            PUSHCOLORS(ptr, n);
-#else
-            for (int j = 0; j < n; j++) PUSHCOLOR(ptr[j]);
-#endif
+            arcada.setAddrWindow(x + startColumn, y, n, 1);
+            arcada.writePixels(ptr, n, false, true);
             bufidx = 1 - bufidx;
         }
     }
-    tft.dmaWait(); // Wait for last DMA transfer to complete
+    arcada.dmaWait(); // Wait for last DMA transfer to complete
     timeSpentDrawing += millis() - t;
 }
 

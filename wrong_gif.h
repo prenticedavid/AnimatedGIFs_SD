@@ -7528,4 +7528,3 @@ const unsigned char PROGMEM globe_rotating_gif[90533] = {
 0xB0,0x01,0x01,0x00,0x3B,
 
 };
-

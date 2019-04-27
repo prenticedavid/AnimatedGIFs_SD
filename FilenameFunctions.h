@@ -1,10 +1,6 @@
 #ifndef FILENAME_FUNCTIONS_H
 #define FILENAME_FUNCTIONS_H
 
-//#define USE_SPIFFS
-#define USE_QSPIFS
-
-
 int enumerateGIFFiles(const char *directoryName, bool displayFilenames);
 void getGIFFilenameByIndex(const char *directoryName, int index, char *pnBuffer);
 int openGifFilenameByIndex(const char *directoryName, int index);

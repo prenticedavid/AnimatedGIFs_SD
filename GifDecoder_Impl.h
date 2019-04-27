@@ -174,11 +174,18 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
         for (int i = 0; i < 256; i++) {
+#if defined(ARCADA_TFT_SPI)
+            uint8_t r = palette[i].red;
+            uint8_t g = palette[i].green;
+            uint8_t b = palette[i].blue;
+            palette565[i] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
+#else
             // Pre-endian-swap in the palette
             palette565[i] = __builtin_bswap16(
               ((palette[i].red   & 0xF8) << 8) |
               ((palette[i].green & 0xFC) << 3) |
               ((palette[i].blue        ) >> 3));
+#endif
         }
     }
 #endif
