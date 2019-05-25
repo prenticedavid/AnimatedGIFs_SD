@@ -43,17 +43,16 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Animated GIFs Demo");
 
-    // First call begin to mount the filesystem.  Check that it returns true
-    // to make sure the filesystem was mounted.
-    int num_files = 0;
-
-    if (arcada.filesysBegin()) {
-      Serial.println("Found filesystem!");
-    }
-
     arcada.displayBegin();
     arcada.fillScreen(ARCADA_BLUE);
     arcada.setBacklight(255);
+
+    if (arcada.filesysBegin()) {
+      Serial.println("Found filesystem!");
+    } else {
+      arcada.haltBox("No filesystem found! For QSPI flash, load CircuitPython. For SD cards, format with FAT");
+    }
+
 }
 
 uint32_t fileStartTime = DISPLAY_TIME_SECONDS * -1001;
@@ -81,7 +80,10 @@ void loop() {
         cycle_start = now;
         int num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
         if (num_files < 0) {
-          Serial.println("No gifs directory");
+          arcada.errorBox("No '" GIF_DIRECTORY "' directory found!\nPlease create it & continue");
+          return;
+        } else if (num_files == 0) {
+          arcada.errorBox("No GIF files found! Please add some & continue");
           return;
         }
         // Determine how many animated GIF files exist
