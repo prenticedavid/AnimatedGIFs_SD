@@ -6,6 +6,10 @@
 
 #include <stdint.h>
 
+#ifndef min
+#define min(a, b) (((a) <= (b)) ? (a) : (b))
+#endif
+
 typedef void (*callback)(void);
 typedef void (*pixel_callback)(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue);
 typedef void (*line_callback)(int16_t x, int16_t y, uint8_t *buf, int16_t wid, uint16_t *palette565, int16_t skip);
