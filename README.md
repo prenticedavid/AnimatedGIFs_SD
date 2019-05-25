@@ -1,16 +1,12 @@
-# AnimatedGIFs_SD
-Display GIFs on TFT screens from Flash, SD or SPIFFS 
+# Adafruit_Arcada_GifDecoder
 
-GIFs require at least 32kB of SRAM.   So this example can only run on Zero, Due, ESP8266, ESP32, Teensy3.x, STM32x4xx ...
+Display GIFs on TFT screens from Flash or SD, using Adafruit Arcada. GIFs reside in a directory "/gifs" on the filesystem. If using QSPI storage and TinyUSB stack, the filesystem will be available as a USB disk drive
 
-All targets can use SPI libraries e.g TFT_eSPI, Adafruit_ST7735, Adafruit_ILI9341, ...
-Most targets can use MCUFRIEND_kbv (except ESP8266)
+This example has been deeply modified from https://github.com/prenticedavid/AnimatedGIFs_SD to be for use with Adafruit Arcada (SAMD51) boards only at this tim. 
 
-Most chips can store some sample GIFs in Flash
-All targets can render unlimited number of GIFs from SD  Card.
-ESP8266 and ESP32 can also store some samples with SPIFFS.  Enable with USE_SPIFFS in FileNameFunctions.h
+--------------------------------------
 
-Note that you need a current ESP32 for SPIFFS.   And ESP is a little fussy about SD Card type.
+Original Credits (see also other readme)
 
 Set DEBUG to 0, 2, 3 in GifDecoderImpl.h  
 
