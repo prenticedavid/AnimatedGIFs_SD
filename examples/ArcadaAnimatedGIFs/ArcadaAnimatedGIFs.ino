@@ -3,7 +3,6 @@
 #include <Adafruit_Arcada.h>
 #include "GifDecoder.h"
 #include "FilenameFunctions.h"
-#include "default_gifs.h"          // The built in demo gifs
 
 #define DISPLAY_TIME_SECONDS     10        // show for N seconds before continuing to next gif
 #define GIF_DIRECTORY           "/gifs"    // on SD or QSPI
@@ -13,7 +12,6 @@ const uint8_t *g_gif;
 Adafruit_Arcada arcada;
 int16_t  gif_offset_x, gif_offset_y;
 uint32_t timeSpentDrawing, timeSpentFS;
-int num_files;
 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
 
@@ -37,40 +35,25 @@ void setup() {
     decoder.setFileReadCallback(fileReadCallback);
     decoder.setFileReadBlockCallback(fileReadBlockCallback);
 
+    // Start arcada!
+    arcada.begin();
+    // If we are using TinyUSB & QSPI we will have the filesystem show up!
+    arcada.filesysBeginMSD();
+  
     Serial.begin(115200);
     Serial.println("Animated GIFs Demo");
 
     // First call begin to mount the filesystem.  Check that it returns true
     // to make sure the filesystem was mounted.
-    num_files = 0;
+    int num_files = 0;
 
     if (arcada.filesysBegin()) {
       Serial.println("Found filesystem!");
       num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
     }
-    if (num_files <= 0) {
-      Serial.println("No QSPI or SD files found, using built-in demos");
-      decoder.setFileSeekCallback(fileSeekCallback_P);
-      decoder.setFilePositionCallback(filePositionCallback_P);
-      decoder.setFileReadCallback(fileReadCallback_P);
-      decoder.setFileReadBlockCallback(fileReadBlockCallback_P);
-      g_gif = gifs[0].data;
-      for (num_files = 0; num_files < sizeof(gifs) / sizeof(*gifs); num_files++) {
-          Serial.println(gifs[num_files].name);
-      }    
-    }
-
-    // Determine how many animated GIF files exist
-    Serial.print("Animated GIF files Found: ");
-    Serial.println(num_files);
 
     if (num_files < 0) {
         Serial.println("No gifs directory");
-        while (1);
-    }
-
-    if (!num_files) {
-        Serial.println("Empty gifs directory");
         while (1);
     }
 
@@ -84,7 +67,11 @@ uint32_t cycle_start = 0L;
 int file_index = -1;
 
 void loop() {
-
+    if (arcada.recentUSB()) { 
+      fileStartTime = DISPLAY_TIME_SECONDS * -1001;  // restart when we get back
+      return;                                        // prioritize USB over GIF decoding
+    }
+    
     uint32_t now = millis();
     if(((now - fileStartTime) > (DISPLAY_TIME_SECONDS * 1000)) &&
        (decoder.getCycleNo() > 1)) { // at least one 'cycle' elapsed
@@ -96,18 +83,16 @@ void loop() {
         sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%% Spent %d ms on drawing, %d ms on filesys",
                 frames, cycle_design, cycle_actual, percent, timeSpentDrawing, timeSpentFS);
         Serial.println(buf);
+
         cycle_start = now;
+        int num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
+        // Determine how many animated GIF files exist
+        Serial.print("Animated GIF files Found: ");  Serial.println(num_files);
         if (++file_index >= num_files) {
             file_index = 0;
         }
 
-        int good;
-        if (g_gif) {
-          good = (openGifFilenameByIndex_P(GIF_DIRECTORY, file_index) >= 0);
-        } else {
-          good = (openGifFilenameByIndex(GIF_DIRECTORY, file_index) >= 0);
-        }
-        if (good < 0) {
+        if (openGifFilenameByIndex(GIF_DIRECTORY, file_index) < 0) {
           return;
         }
         timeSpentFS = timeSpentDrawing = 0;
@@ -136,43 +121,6 @@ void loop() {
 
     decoder.decodeFrame();
 }
-
-/******************************* File or Memory Functions */
-
-uint32_t g_seek;
-bool fileSeekCallback_P(unsigned long position) {
-    g_seek = position;
-    return true;
-}
-
-unsigned long filePositionCallback_P(void) {
-    return g_seek;
-}
-
-int fileReadCallback_P(void) {
-    return pgm_read_byte(g_gif + g_seek++);
-}
-
-int fileReadBlockCallback_P(void * buffer, int numberOfBytes) {
-    memcpy_P(buffer, g_gif + g_seek, numberOfBytes);
-    g_seek += numberOfBytes;
-    return numberOfBytes; //.kbv
-}
-
-bool openGifFilenameByIndex_P(const char *dirname, int index)
-{
-    gif_detail_t *g = &gifs[index];
-    g_gif = g->data;
-    g_seek = 0;
-
-    Serial.print("Flash: ");
-    Serial.print(g->name);
-    Serial.print(" size: ");
-    Serial.println(g->sz);
-
-    return index < num_files;
-}
-
 
 /******************************* Drawing functions */
 
