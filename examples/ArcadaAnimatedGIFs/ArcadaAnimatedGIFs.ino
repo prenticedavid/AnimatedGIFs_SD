@@ -49,12 +49,6 @@ void setup() {
 
     if (arcada.filesysBegin()) {
       Serial.println("Found filesystem!");
-      num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
-    }
-
-    if (num_files < 0) {
-        Serial.println("No gifs directory");
-        while (1);
     }
 
     arcada.displayBegin();
@@ -86,6 +80,10 @@ void loop() {
 
         cycle_start = now;
         int num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
+        if (num_files < 0) {
+          Serial.println("No gifs directory");
+          return;
+        }
         // Determine how many animated GIF files exist
         Serial.print("Animated GIF files Found: ");  Serial.println(num_files);
         if (++file_index >= num_files) {
