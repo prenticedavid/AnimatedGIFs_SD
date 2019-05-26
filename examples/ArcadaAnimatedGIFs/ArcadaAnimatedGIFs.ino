@@ -2,16 +2,16 @@
 
 #include <Adafruit_Arcada.h>
 #include "GifDecoder.h"
-#include "FilenameFunctions.h"
 
 #define DISPLAY_TIME_SECONDS     10        // show for N seconds before continuing to next gif
 #define GIF_DIRECTORY           "/gifs"    // on SD or QSPI
 const uint8_t *g_gif;
+File file;
 
 /*************** Display setup */
 Adafruit_Arcada arcada;
 int16_t  gif_offset_x, gif_offset_y;
-uint32_t timeSpentDrawing, timeSpentFS;
+
 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
 
@@ -73,29 +73,33 @@ void loop() {
         int32_t cycle_design = decoder.getCycleTime();  // Intended duration
         int32_t cycle_actual = now - cycle_start;       // Actual duration
         int32_t percent = 100 * cycle_design / cycle_actual;
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%% Spent %d ms on drawing, %d ms on filesys",
-                frames, cycle_design, cycle_actual, percent, timeSpentDrawing, timeSpentFS);
+        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
+                frames, cycle_design, cycle_actual, percent);
         Serial.println(buf);
 
         cycle_start = now;
-        int num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
-        if (num_files < 0) {
+        if (! arcada.chdir(GIF_DIRECTORY)) {
           arcada.errorBox("No '" GIF_DIRECTORY "' directory found!\nPlease create it & continue");
           return;
-        } else if (num_files == 0) {
-          arcada.errorBox("No GIF files found! Please add some & continue");
+        } 
+
+        int num_files = arcada.filesysListFiles(GIF_DIRECTORY, "GIF");
+        if (num_files == 0) {
+          arcada.errorBox("No GIF files found! Please add some & press (A) to continue");
           return;
         }
+
         // Determine how many animated GIF files exist
         Serial.print("Animated GIF files Found: ");  Serial.println(num_files);
         if (++file_index >= num_files) {
             file_index = 0;
         }
 
-        if (openGifFilenameByIndex(GIF_DIRECTORY, file_index) < 0) {
+        file = arcada.openFileByIndex(GIF_DIRECTORY, file_index, O_READ, "GIF");
+        if (!file) {
           return;
         }
-        timeSpentFS = timeSpentDrawing = 0;
+
         arcada.dmaWait();
         arcada.endWrite();   // End transaction from any prior callback
         arcada.fillScreen(ARCADA_BLACK);
@@ -124,13 +128,9 @@ void loop() {
 
 /******************************* Drawing functions */
 
-void updateScreenCallback(void) {
-    ;
-}
+void updateScreenCallback(void) {  }
 
-void screenClearCallback(void) {
-    //    arcada.fillRect(0, 0, 128, 128, 0x0000);
-}
+void screenClearCallback(void) {  }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
     arcada.drawPixel(x, y, arcada.color565(red, green, blue));
@@ -171,7 +171,23 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         }
     }
     arcada.dmaWait(); // Wait for last DMA transfer to complete
-    timeSpentDrawing += millis() - t;
+}
+
+
+bool fileSeekCallback(unsigned long position) {
+  return file.seek(position);
+}
+
+unsigned long filePositionCallback(void) { 
+  return file.position(); 
+}
+
+int fileReadCallback(void) {
+    return file.read(); 
+}
+
+int fileReadBlockCallback(void * buffer, int numberOfBytes) {
+    return file.read((uint8_t*)buffer, numberOfBytes); //.kbv
 }
 
 
