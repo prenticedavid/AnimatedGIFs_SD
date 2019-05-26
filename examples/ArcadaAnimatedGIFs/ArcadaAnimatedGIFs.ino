@@ -68,25 +68,56 @@ void setup() {
 uint32_t fileStartTime = displayTimeSeconds * -1001;
 uint32_t cycle_start = 0L;
 int file_index = -1;
+int8_t nextGIF = 0;       // 0 for no change, +1 for next gif, -1 for previous gif
 
 void loop() {
     if (arcada.recentUSB()) { 
-      fileStartTime = displayTimeSeconds * -1001;  // restart when we get back
-      return;                                        // prioritize USB over GIF decoding
+      nextGIF = 1;  // restart when we get back
+      return;       // prioritize USB over GIF decoding
     }
-    
-    uint32_t now = millis();
-    if(((now - fileStartTime) > (displayTimeSeconds * 1000)) &&
-       (decoder.getCycleNo() > 1)) { // at least one 'cycle' elapsed
-        char buf[80];
-        int32_t frames       = decoder.getFrameCount();
-        int32_t cycle_design = decoder.getCycleTime();  // Intended duration
-        int32_t cycle_actual = now - cycle_start;       // Actual duration
-        int32_t percent = 100 * cycle_design / cycle_actual;
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
-                frames, cycle_design, cycle_actual, percent);
-        Serial.println(buf);
 
+    // Check button presses
+    arcada.readButtons();
+    uint8_t buttons = arcada.justPressedButtons();
+    if (buttons & ARCADA_BUTTONMASK_LEFT) {
+      nextGIF = -1;   // back
+    }
+    if (buttons & ARCADA_BUTTONMASK_RIGHT) {
+      nextGIF = 1;   // forward
+    }
+    if (buttons & ARCADA_BUTTONMASK_UP) {
+      int16_t newbrightness = arcada.getBacklight();   // brightness up
+      newbrightness = min(255, newbrightness+25);      // about 10 levels
+      Serial.printf("New brightness %d", newbrightness);
+      arcada.setBacklight(newbrightness, true);   // save to disk
+    }
+    if (buttons & ARCADA_BUTTONMASK_DOWN) {
+      int16_t newbrightness = arcada.getBacklight();   // brightness down
+      newbrightness = max(25, newbrightness-25);       // about 10 levels
+      Serial.printf("New brightness %d", newbrightness);
+      arcada.setBacklight(newbrightness, true);   // save to disk
+    }
+
+    uint32_t now = millis();
+    if( ((now - fileStartTime) > (displayTimeSeconds * 1000)) &&
+        (decoder.getCycleNo() > 1)) // at least one 'cycle' elapsed
+    {
+        nextGIF = 1;
+    }
+
+    if (nextGIF != 0) {
+      // Print the stats for this GIF      
+      char buf[80];
+      int32_t frames       = decoder.getFrameCount();
+      int32_t cycle_design = decoder.getCycleTime();  // Intended duration
+      int32_t cycle_actual = now - cycle_start;       // Actual duration
+      int32_t percent = 100 * cycle_design / cycle_actual;
+      sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
+              frames, cycle_design, cycle_actual, percent);
+      Serial.println(buf);
+    }
+
+    if (nextGIF != 0) {
         cycle_start = now;
         if (! arcada.chdir(GIF_DIRECTORY)) {
           arcada.errorBox("No '" GIF_DIRECTORY "' directory found!\nPlease create it & continue");
@@ -101,10 +132,15 @@ void loop() {
 
         // Determine how many animated GIF files exist
         Serial.print("Animated GIF files Found: ");  Serial.println(num_files);
-        if (++file_index >= num_files) {
-            file_index = 0;
+        file_index += nextGIF;
+        if (file_index >= num_files) {
+          file_index = 0;                // wrap around to first file
         }
-
+        if (file_index < 0) {
+          file_index = num_files-1;      // wrap around to last file
+        }
+        nextGIF = 0; // and we're done moving between GIFs
+        
         file = arcada.openFileByIndex(GIF_DIRECTORY, file_index, O_READ, "GIF");
         if (!file) {
           return;
@@ -115,6 +151,7 @@ void loop() {
         arcada.fillScreen(ARCADA_BLACK);
         decoder.startDecoding();
 
+        // Center the GIF
         uint16_t w, h;
         decoder.getSize(&w, &h);
         Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
