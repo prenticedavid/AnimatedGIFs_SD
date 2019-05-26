@@ -3,70 +3,80 @@
 #include <Adafruit_Arcada.h>
 #include "GifDecoder.h"
 
-#define DISPLAY_TIME_SECONDS     10        // show for N seconds before continuing to next gif
-#define GIF_DIRECTORY           "/gifs"    // on SD or QSPI
-const uint8_t *g_gif;
-File file;
-
 /*************** Display setup */
 Adafruit_Arcada arcada;
 int16_t  gif_offset_x, gif_offset_y;
 
+#define GIF_DIRECTORY        "/gifs"    // on SD or QSPI
+uint16_t displayTimeSeconds = 10;        // show for at least N seconds before continuing to next gif
+// A default "arcada_config.json" can contain something like:
+//    {   "volume":255, "brightness":255, "seconds_per_gif": 5   }
+// Each gif will do a complete loop and then quit after seconds_per_gif has passed. Set to 0 to play only once!
+
+File file;
 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
-
     The lzwMaxBits value of 12 supports all GIFs, but uses 16kB RAM
     lzwMaxBits can be set to 10 or 11 for small displays, 12 for large displays
     All 32x32-pixel GIFs tested work with 11, most work with 10
 */
-
 GifDecoder<ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT, 12> decoder;
 
 
 // Setup method runs once, when the sketch starts
 void setup() {
-    decoder.setScreenClearCallback(screenClearCallback);
-    decoder.setUpdateScreenCallback(updateScreenCallback);
-    decoder.setDrawPixelCallback(drawPixelCallback);
-    decoder.setDrawLineCallback(drawLineCallback);
+  decoder.setScreenClearCallback(screenClearCallback);
+  decoder.setUpdateScreenCallback(updateScreenCallback);
+  decoder.setDrawPixelCallback(drawPixelCallback);
+  decoder.setDrawLineCallback(drawLineCallback);
 
-    decoder.setFileSeekCallback(fileSeekCallback);
-    decoder.setFilePositionCallback(filePositionCallback);
-    decoder.setFileReadCallback(fileReadCallback);
-    decoder.setFileReadBlockCallback(fileReadBlockCallback);
+  decoder.setFileSeekCallback(fileSeekCallback);
+  decoder.setFilePositionCallback(filePositionCallback);
+  decoder.setFileReadCallback(fileReadCallback);
+  decoder.setFileReadBlockCallback(fileReadBlockCallback);
 
-    // Start arcada!
-    arcada.begin();
-    // If we are using TinyUSB & QSPI we will have the filesystem show up!
-    arcada.filesysBeginMSD();
+  // Start arcada!
+  arcada.begin();
+  // If we are using TinyUSB & QSPI we will have the filesystem show up!
+  arcada.filesysBeginMSD();
+
+  //while (!Serial) delay(10);
   
-    Serial.begin(115200);
-    Serial.println("Animated GIFs Demo");
+  Serial.begin(115200);
+  Serial.println("Animated GIFs Demo");
+  arcada.displayBegin();
+  arcada.fillScreen(ARCADA_BLUE);
+  arcada.setBacklight(255);
 
-    arcada.displayBegin();
-    arcada.fillScreen(ARCADA_BLUE);
-    arcada.setBacklight(255);
+  if (arcada.filesysBegin()) {
+    Serial.println("Found filesystem!");
+  } else {
+    arcada.haltBox("No filesystem found! For QSPI flash, load CircuitPython. For SD cards, format with FAT");
+  }
 
-    if (arcada.filesysBegin()) {
-      Serial.println("Found filesystem!");
-    } else {
-      arcada.haltBox("No filesystem found! For QSPI flash, load CircuitPython. For SD cards, format with FAT");
-    }
-
+  if (! arcada.loadConfigurationFile()) {
+     arcada.infoBox("No configuration file found, using default 10 seconds per GIF");
+  } else if (! arcada.configJSON.containsKey("seconds_per_gif")) {
+     Serial.println("Found config but no key");
+     arcada.infoBox("Configuration doesn't contain 'seconds_per_gif', using default 10 seconds per GIF");
+  } else {
+    displayTimeSeconds = arcada.configJSON["seconds_per_gif"];
+  }
+  Serial.printf("Playing GIFs for at least %d seconds per\n", displayTimeSeconds);
 }
 
-uint32_t fileStartTime = DISPLAY_TIME_SECONDS * -1001;
+uint32_t fileStartTime = displayTimeSeconds * -1001;
 uint32_t cycle_start = 0L;
 int file_index = -1;
 
 void loop() {
     if (arcada.recentUSB()) { 
-      fileStartTime = DISPLAY_TIME_SECONDS * -1001;  // restart when we get back
+      fileStartTime = displayTimeSeconds * -1001;  // restart when we get back
       return;                                        // prioritize USB over GIF decoding
     }
     
     uint32_t now = millis();
-    if(((now - fileStartTime) > (DISPLAY_TIME_SECONDS * 1000)) &&
+    if(((now - fileStartTime) > (displayTimeSeconds * 1000)) &&
        (decoder.getCycleNo() > 1)) { // at least one 'cycle' elapsed
         char buf[80];
         int32_t frames       = decoder.getFrameCount();
@@ -234,7 +244,7 @@ int fileReadBlockCallback(void * buffer, int numberOfBytes) {
 
     This code first looks for .gif files in the /gifs/ directory
     (customize below with the GIF_DIRECTORY definition) then plays random GIFs in the directory,
-    looping each GIF for DISPLAY_TIME_SECONDS
+    looping each GIF for displayTimeSeconds
 
     This example is meant to give you an idea of how to add GIF playback to your own sketch.
     For a project that adds GIF playback with other features, take a look at
