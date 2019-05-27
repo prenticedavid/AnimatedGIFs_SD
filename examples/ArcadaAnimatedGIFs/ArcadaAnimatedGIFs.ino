@@ -5,22 +5,17 @@
 
 /*************** Display setup */
 Adafruit_Arcada arcada;
+GifDecoder<ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT, 12> decoder;
+File file;
 int16_t  gif_offset_x, gif_offset_y;
 
 #define GIF_DIRECTORY        "/gifs"    // on SD or QSPI
-uint16_t displayTimeSeconds = 10;        // show for at least N seconds before continuing to next gif
-// A default "arcada_config.json" can contain something like:
+uint16_t displayTimeSeconds = 10;       // show for at least N seconds before continuing to next gif
+
+// A default "/arcada_config.json" can contain something like:
 //    {   "volume":255, "brightness":255, "seconds_per_gif": 5   }
 // Each gif will do a complete loop and then quit after seconds_per_gif has passed. Set to 0 to play only once!
-
-File file;
-
-/*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
-    The lzwMaxBits value of 12 supports all GIFs, but uses 16kB RAM
-    lzwMaxBits can be set to 10 or 11 for small displays, 12 for large displays
-    All 32x32-pixel GIFs tested work with 11, most work with 10
-*/
-GifDecoder<ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT, 12> decoder;
+// Save the 'arcada_config.json' in the *root* of the filesystem, not in /gifs (its universal)
 
 
 // Setup method runs once, when the sketch starts
@@ -56,9 +51,11 @@ void setup() {
 
   if (! arcada.loadConfigurationFile()) {
      arcada.infoBox("No configuration file found, using default 10 seconds per GIF");
+     arcada.fillScreen(ARCADA_BLUE);
   } else if (! arcada.configJSON.containsKey("seconds_per_gif")) {
      Serial.println("Found config but no key");
      arcada.infoBox("Configuration doesn't contain 'seconds_per_gif', using default 10 seconds per GIF");
+     arcada.fillScreen(ARCADA_BLUE);
   } else {
     displayTimeSeconds = arcada.configJSON["seconds_per_gif"];
   }
