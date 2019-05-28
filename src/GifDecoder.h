@@ -36,7 +36,7 @@ template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 class GifDecoder {
 public:
     int startDecoding(void);
-    int decodeFrame(void);
+    int decodeFrame(bool delayAfterDecode=true);
     int getCycleTime(void) { return cycleTime; }  //.kbv
     int getCycleNo(void) { return cycleNo; }  //.kbv
     int getFrameCount(void) { return frameCount; }  //.kbv
@@ -52,6 +52,8 @@ public:
     void setFilePositionCallback(file_position_callback f);
     void setFileReadCallback(file_read_callback f);
     void setFileReadBlockCallback(file_read_block_callback f);
+
+    int getFrameNumber(void) { return frameNo; }
 
 private:
     void parseTableBasedImage(void);
@@ -93,6 +95,7 @@ private:
     int tbiPackedBits;
     bool tbiInterlaced;
 
+    bool _delayAfterDecode;
     int frameDelay;
     int transparentColorIndex;
     int prevBackgroundIndex;

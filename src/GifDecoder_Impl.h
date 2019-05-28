@@ -730,8 +730,9 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
 }
 
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
-int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
+int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(bool delayAfterDecode) {
     // Parse gif data
+    _delayAfterDecode = delayAfterDecode;
     int result = parseData();
     if (result < ERROR_NONE) {
         Serial.println("Error: ");
@@ -899,11 +900,13 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     // note the time before calling
 
     // Hold until time to display new frame (see comment at start of function)
-    uint32_t t;
-    while(((t = micros()) - frameStartTime) < priorFrameDelay);
-    cycleTime += frameDelay * 10;
-    if(updateScreenCallback) {
+    if (_delayAfterDecode) {
+      uint32_t t;
+      while(((t = micros()) - frameStartTime) < priorFrameDelay);
+      cycleTime += frameDelay * 10;
+      if(updateScreenCallback) {
         (*updateScreenCallback)();
+      }
+      frameStartTime = t;
     }
-    frameStartTime = t;
 }
