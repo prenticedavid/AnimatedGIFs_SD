@@ -23,9 +23,9 @@ GifDecoder<GIFWIDTH, 320, 12> decoder;
 #define GIF_DIRECTORY "/"     //ESP8266 SPIFFS
 #define DISKCOLOUR   CYAN
 #else
-#define GIF_DIRECTORY "/gifs"
+//#define GIF_DIRECTORY "/gifs"
 //#define GIF_DIRECTORY "/gifs32"
-//#define GIF_DIRECTORY "/gifsdbg"
+#define GIF_DIRECTORY "/gifsdbg"
 #define DISKCOLOUR   BLUE
 #endif
 
@@ -88,6 +88,9 @@ MCUFRIEND_kbv tft;
 #define WHITE   0xFFFF
 
 int num_files;
+long rowCount;  //.kbv
+long plotCount; //.kbv
+long skipCount; //.kbv
 
 #include "gifs_128.h"
 #include "wrong_gif.h"
@@ -159,6 +162,8 @@ void updateScreenCallback(void) {
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
     tft.drawPixel(x, y, tft.color565(red, green, blue));
+    plotCount++;
+    rowCount = 1;
 }
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
@@ -173,7 +178,10 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         int n = 0;
         while (i < w) {
             pixel = buf[i++];
-            if (pixel == skip) break;
+            if (pixel == skip) {
+                skipCount++;
+                break;
+            }
             buf565[n++] = palette[pixel];
         }
         if (n) {
@@ -186,6 +194,8 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
 #endif
         }
     }
+    plotCount += w;  //count total pixels (including skipped)
+    rowCount += 1;   //count number of drawLines
 }
 
 // Setup method runs once, when the sketch starts
@@ -255,9 +265,12 @@ void loop() {
         int32_t cycle_design = decoder.getCycleTime();
         int32_t cycle_time = now - cycle_start;
         int32_t percent = (100 * cycle_design) / cycle_time;
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %d%%",
-                frames, cycle_design, cycle_time, percent);
+        int32_t skipcent = (100 * skipCount) / (plotCount);
+        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %ld%% plot: %ld [%ld%%] w=%ld",
+                frames, cycle_design, cycle_time, percent, plotCount, skipcent, plotCount/rowCount);
         Serial.println(buf);
+        skipCount = plotCount = rowCount = 0L;
+        
         cycle_start = now;
         //        num_files = 2;
         if (++index >= num_files) {
@@ -347,6 +360,3 @@ void loop() {
       decrease refreshRate in setup() to 90 or lower to get good an accurate GIF frame rate
     - Set the chip select pin for your board.  On Teensy 3.5/3.6, the onboard microSD CS pin is "BUILTIN_SDCARD"
 */
-
-
-
