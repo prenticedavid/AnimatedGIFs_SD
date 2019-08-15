@@ -41,7 +41,38 @@ STM32F103RB  128kB Flash  20kB SRAM
 STM32L476RE 1024kB Flash 128kB SRAM    
 [/code]
 
-I have attached two GIF sketches.  One for rendering animations from Flash.
-One for rendering animations from SD card.  Copy example files to /GIF directory.
+Single AnimatedGIFs_SD sketch:
+If SD or SPIFFS is found,  GIF is rendered from SD (BLUE background)
+Else GIFis rendered from PROGMEM (MAGENTA background)
+
+Debug output @ 115200 baud on Serial Terminal.
+Most GIFs do not display Frames at design rate.
+
+Each Frame is stored as a LZW image containing the minimal rectangle with changed pixels.
+Transparent pixels are skipped.  Changed pixels are plotted.
+
+Frame data must be read from SD or PROGMEM
+Each Frame has a small header + LZW compressed image.
+LZW must be decoded to N rows of uncompressed bytes.
+Each byte represents a pixel from a 255 colour Palette (or special transparent byte)
+
+It is expensive to read file from SD or SPIFFS
+It is expensive for LZW decoder to read bytes via Callback function.
+It is expensive to skip pixels.   You have to reset the Window after each skip.
+It is expensive to lookup each colour from the Palette.
+
+The UUP115.gif file was rendered from SD with a STM32F446 on a MCUFRIEND_kbv display.
+Pathname: /gifsdbg2/UUP115.GIF
+Logical Screen [LZW=8 320x240 P:0xF7 B:255 A:0 F:40ms] frames:0 pass=1
+[72 frames = 2880ms] actual: 50635ms speed: 5% plot: 5504880 [14%] w=318
+
+Each frame is different.  It takes a 720ms to decode and render each frame.   
+It is clearly not possible to achieve a 40ms frame rate.
+
+It might be possible to render uncompressed frames directly from SD.
+It needs to read 154k SPI bytes per frame.   
+This requires at least 42MHz SPI from SD card to get the raw data.
+And a similar time for SPI data to be sent to the TFT.
+So I doubt if you could do a 320x240 frame in less than 80ms.
 
 David.
