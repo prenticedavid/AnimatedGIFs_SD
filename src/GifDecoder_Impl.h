@@ -174,7 +174,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
         for (int i = 0; i < 256; i++) {
-#if !defined(ARCADA_TFT_D0)
+#if !defined(ARCADA_TFT_D0) && !defined(USE_SPI_DMA)
             uint8_t r = palette[i].red;
             uint8_t g = palette[i].green;
             uint8_t b = palette[i].blue;
@@ -196,16 +196,16 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::fillImageDataRect(uint8_t colorIndex, int x, int y, int width, int height) {
 
-    int yOffset;
+#if NO_IMAGEDATA < 2
+    int yOffset = 0;
 
     for (int yy = y; yy < height + y; yy++) {
         yOffset = yy * maxGifWidth;
         for (int xx = x; xx < width + x; xx++) {
-#if NO_IMAGEDATA < 2
             imageData[yOffset + xx] = colorIndex;
-#endif
         }
     }
+#endif
 }
 
 // Fill entire imageData buffer with a color index
@@ -847,21 +847,21 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     frameNo++;
 #if GIFDEBUG > 1
     char buf[80];
-    unsigned long filePositionBefore = filePositionCallback();
     if (frameNo == 1) {
         sprintf(buf, "Logical Screen [LZW=%d %dx%d P:0x%02X B:%d A:%d F:%dms] frames:%d pass=%d",
                 lzwCodeSize, lsdWidth, lsdHeight, lsdPackedField, lsdBackgroundIndex, lsdAspectRatio,
                 frameDelay * 10, frameCount, cycleNo);
         Serial.println(buf);
     }
-#endif
 #if GIFDEBUG > 2
+    unsigned long filePositionBefore = filePositionCallback();
     sprintf(buf, "Frame %2d: [=%6ld P:0x%02X B:%d F:%dms] @ %d,%d %dx%d ms:",
             frameNo, filePositionBefore, tbiPackedBits, transparentColorIndex, frameDelay * 10,
             tbiImageX, tbiImageY, tbiWidth, tbiHeight);
     Serial.print(buf);
     delay(10);    //allow Serial to complete @ 115200 baud
     int32_t t = millis();
+#endif
 #endif
     for (int state = 0; state < 4; state++) {
         if (tbiInterlaced == 0) state = 4; //regular does one pass
