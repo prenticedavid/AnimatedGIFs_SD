@@ -2,7 +2,7 @@
 
 Display GIFs on TFT screens from Flash or SD, using Adafruit Arcada. GIFs reside in a directory "/gifs" on the filesystem. If using QSPI storage and TinyUSB stack, the filesystem will be available as a USB disk drive
 
-This example has been deeply modified from https://github.com/prenticedavid/AnimatedGIFs_SD to be for use with Adafruit Arcada (SAMD51) boards only at this tim. 
+This example has been deeply modified from https://github.com/prenticedavid/AnimatedGIFs_SD to be for use with Adafruit Arcada (SAMD51) boards only at this time. 
 
 --------------------------------------
 
