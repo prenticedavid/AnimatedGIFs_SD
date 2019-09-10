@@ -17,6 +17,19 @@ uint16_t displayTimeSeconds = 10;       // show for at least N seconds before co
 // Each gif will do a complete loop and then quit after seconds_per_gif has passed. Set to 0 to play only once!
 // Save the 'arcada_config.json' in the *root* of the filesystem, not in /gifs (its universal)
 
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+  #define NEXT_GIF_BUTTON        ARCADA_BUTTONMASK_UP
+  #define PREV_GIF_BUTTON        ARCADA_BUTTONMASK_DOWN
+  #define BRIGHTER_BUTTON        0    // limited buttons so dont use for backlight
+  #define DIMMER_BUTTON          0
+  uint8_t dual_gif_action = 0;    // 0 = both same, 1 = left eye mirrored gif
+#else
+  #define NEXT_GIF_BUTTON        ARCADA_BUTTONMASK_RIGHT
+  #define PREV_GIF_BUTTON        ARCADA_BUTTONMASK_LEFT
+  #define BRIGHTER_BUTTON        ARCADA_BUTTONMASK_UP
+  #define DIMMER_BUTTON          ARCADA_BUTTONMASK_DOWN
+#endif
+
 
 // Setup method runs once, when the sketch starts
 void setup() {
@@ -44,6 +57,9 @@ void setup() {
   Serial.println("Animated GIFs Demo");
   arcada.displayBegin();
   arcada.display->fillScreen(ARCADA_BLUE);
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+  arcada.display2->fillScreen(ARCADA_BLUE);
+#endif
   arcada.setBacklight(255);
 
   if (arcada.filesysBegin()) {
@@ -55,10 +71,16 @@ void setup() {
   if (! arcada.loadConfigurationFile()) {
      arcada.infoBox("No configuration file found, using default 10 seconds per GIF");
      arcada.display->fillScreen(ARCADA_BLUE);
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+     arcada.display2->fillScreen(ARCADA_BLUE);
+#endif
   } else if (! arcada.configJSON.containsKey("seconds_per_gif")) {
      Serial.println("Found config but no key");
      arcada.infoBox("Configuration doesn't contain 'seconds_per_gif', using default 10 seconds per GIF");
      arcada.display->fillScreen(ARCADA_BLUE);
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+     arcada.display2->fillScreen(ARCADA_BLUE);
+#endif
   } else {
     displayTimeSeconds = arcada.configJSON["seconds_per_gif"];
   }
@@ -79,19 +101,19 @@ void loop() {
     // Check button presses
     arcada.readButtons();
     uint8_t buttons = arcada.justPressedButtons();
-    if (buttons & ARCADA_BUTTONMASK_LEFT) {
+    if (buttons & PREV_GIF_BUTTON) {
       nextGIF = -1;   // back
     }
-    if (buttons & ARCADA_BUTTONMASK_RIGHT) {
+    if (buttons & NEXT_GIF_BUTTON ) {
       nextGIF = 1;   // forward
     }
-    if (buttons & ARCADA_BUTTONMASK_UP) {
+    if (buttons & BRIGHTER_BUTTON) {
       int16_t newbrightness = arcada.getBacklight();   // brightness up
       newbrightness = min(255, newbrightness+25);      // about 10 levels
       Serial.printf("New brightness %d", newbrightness);
       arcada.setBacklight(newbrightness, true);   // save to disk
     }
-    if (buttons & ARCADA_BUTTONMASK_DOWN) {
+    if (buttons & DIMMER_BUTTON) {
       int16_t newbrightness = arcada.getBacklight();   // brightness down
       newbrightness = max(25, newbrightness-25);       // about 10 levels
       Serial.printf("New brightness %d", newbrightness);
@@ -149,6 +171,11 @@ void loop() {
         arcada.display->dmaWait();
         arcada.display->endWrite();   // End transaction from any prior callback
         arcada.display->fillScreen(ARCADA_BLACK);
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+        arcada.display2->dmaWait();
+        arcada.display2->endWrite();   // End transaction from any prior callback
+        arcada.display2->fillScreen(ARCADA_BLACK);
+#endif
         decoder.startDecoding();
 
         // Center the GIF
@@ -181,6 +208,9 @@ void screenClearCallback(void) {  }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
     arcada.display->drawPixel(x, y, arcada.display->color565(red, green, blue));
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+    arcada.display2->drawPixel(x, y, arcada.display->color565(red, green, blue));
+#endif
 }
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
@@ -207,17 +237,37 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         }
         if (n) {
             arcada.display->dmaWait(); // Wait for prior DMA transfer to complete
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+            arcada.display2->dmaWait(); // Wait for prior DMA transfer to complete
+#endif
             if (first) {
               arcada.display->endWrite();   // End transaction from prior callback
               arcada.display->startWrite(); // Start new display transaction
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+              arcada.display2->endWrite();   // End transaction from prior callback
+              arcada.display2->startWrite(); // Start new display transaction
+#endif
               first = false;
             }
             arcada.display->setAddrWindow(x + startColumn, y, n, 1);
             arcada.display->writePixels(ptr, n, false, true);
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+            if (dual_gif_action == 0) { // same image on both!
+              arcada.display2->setAddrWindow(x + startColumn, y, n, 1);
+              arcada.display2->writePixels(ptr, n, false, true);
+            }
+            if (dual_gif_action == 1) {
+              arcada.display2->setAddrWindow(x + startColumn, y, n, 1);
+              
+            }
+#endif
             bufidx = 1 - bufidx;
         }
     }
     arcada.display->dmaWait(); // Wait for last DMA transfer to complete
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+    arcada.display2->dmaWait(); // Wait for last DMA transfer to complete
+#endif
 }
 
 
