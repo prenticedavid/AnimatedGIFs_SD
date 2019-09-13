@@ -35,7 +35,10 @@ void setup() {
   decoder.setFileReadBlockCallback(fileReadBlockCallback);
 
   // Start arcada!
-  arcada.begin();
+  if (!arcada.arcadaBegin()) {
+    Serial.println("Couldn't start Arcada");
+    while(1) yield();
+  }
   // If we are using TinyUSB & QSPI we will have the filesystem show up!
   arcada.filesysBeginMSD();
 
@@ -55,7 +58,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Animated GIFs Demo");
   arcada.displayBegin();
-  arcada.fillScreen(ARCADA_BLUE);
+  arcada.display->fillScreen(ARCADA_BLUE);
   arcada.setBacklight(255);
 
   if (arcada.filesysBegin()) {
@@ -113,22 +116,22 @@ void loop() {
         return;
       }
 
-      arcada.dmaWait();
-      arcada.endWrite();   // End transaction from any prior callback
-      arcada.fillScreen(ARCADA_BLACK);
+      arcada.display->dmaWait();
+      arcada.display->endWrite();   // End transaction from any prior callback
+      arcada.display->fillScreen(ARCADA_BLACK);
       decoder.startDecoding();
 
       // Center the GIF
       uint16_t w, h;
       decoder.getSize(&w, &h);
       Serial.print("Width: "); Serial.print(w); Serial.print(" height: "); Serial.println(h);
-      if (w < arcada.width()) {
-        gif_offset_x = (arcada.width() - w) / 2;
+      if (w < arcada.display->width()) {
+        gif_offset_x = (arcada.display->width() - w) / 2;
       } else {
         gif_offset_x = 0;
       }
-      if (h < arcada.height()) {
-        gif_offset_y = (arcada.height() - h) / 2;
+      if (h < arcada.display->height()) {
+        gif_offset_y = (arcada.display->height() - h) / 2;
       } else {
         gif_offset_y = 0;
       }
@@ -177,7 +180,7 @@ void updateScreenCallback(void) {  }
 void screenClearCallback(void) {  }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-    arcada.drawPixel(x, y, arcada.color565(red, green, blue));
+    arcada.display->drawPixel(x, y, arcada.display->color565(red, green, blue));
 }
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
@@ -185,9 +188,9 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
     uint32_t t = millis();
     x += gif_offset_x;
     y += gif_offset_y;
-    if (y >= arcada.height() || x >= arcada.width() ) return;
+    if (y >= arcada.display->height() || x >= arcada.display->width() ) return;
     
-    if (x + w > arcada.width()) w = arcada.width() - x;
+    if (x + w > arcada.display->width()) w = arcada.display->width() - x;
     if (w <= 0) return;
 
     uint16_t buf565[2][w];
@@ -203,18 +206,18 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             ptr[n++] = palette[pixel];
         }
         if (n) {
-            arcada.dmaWait(); // Wait for prior DMA transfer to complete
+            arcada.display->dmaWait(); // Wait for prior DMA transfer to complete
             if (first) {
-              arcada.endWrite();   // End transaction from prior callback
-              arcada.startWrite(); // Start new display transaction
+              arcada.display->endWrite();   // End transaction from prior callback
+              arcada.display->startWrite(); // Start new display transaction
               first = false;
             }
-            arcada.setAddrWindow(x + startColumn, y, n, 1);
-            arcada.writePixels(ptr, n, false, true);
+            arcada.display->setAddrWindow(x + startColumn, y, n, 1);
+            arcada.display->writePixels(ptr, n, false, true);
             bufidx = 1 - bufidx;
         }
     }
-    arcada.dmaWait(); // Wait for last DMA transfer to complete
+    arcada.display->dmaWait(); // Wait for last DMA transfer to complete
 }
 
 
