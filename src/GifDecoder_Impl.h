@@ -710,7 +710,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
     cycleNo = 0;
     prevDisposalMethod = DISPOSAL_NONE;
     transparentColorIndex = NO_TRANSPARENT_INDEX;
-    frameStartTime = 0;
+    frameStartTime = micros();
     fileSeekCallback(0);
 
     // Validate the header
@@ -747,7 +747,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(bool delayAft
         keyFrame = true;
         prevDisposalMethod = DISPOSAL_NONE;
         transparentColorIndex = NO_TRANSPARENT_INDEX;
-        frameStartTime = 0;
+        frameStartTime = micros();
         fileSeekCallback(0);
 
         // parse Gif Header like with a new file
