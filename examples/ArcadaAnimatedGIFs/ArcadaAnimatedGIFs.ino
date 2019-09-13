@@ -5,7 +5,12 @@
 
 /*************** Display setup */
 Adafruit_Arcada arcada;
-GifDecoder<ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT, 12> decoder;
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+  GifDecoder<ARCADA_TFT_WIDTH*2, ARCADA_TFT_HEIGHT, 12> decoder;
+#else
+  GifDecoder<ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT, 12> decoder;
+#endif
+
 File file;
 int16_t  gif_offset_x, gif_offset_y;
 
@@ -214,14 +219,33 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 }
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
+    uint16_t maxline = arcada.display->width();
+    bool splitdisplay = false;
+    
     uint8_t pixel;
     //uint32_t t = millis();
     x += gif_offset_x;
     y += gif_offset_y;
-    if (y >= arcada.display->height() || x >= arcada.display->width() ) return;
+    if (y >= arcada.display->height() || x >= maxline ) {
+      return;
+    }
     
-    if (x + w > arcada.display->width()) w = arcada.display->width() - x;
+#ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
+    // two possibilities
+    if ((x + w) > 2*maxline) {
+      w = 2*maxline - x;
+    } 
+    if ((x + w) > maxline) {
+      splitdisplay = true;  // split the gif over both displays
+    }
+#else
+    if (x + w > maxline) {
+      w = maxline - x;
+    }
+#endif
     if (w <= 0) return;
+
+    //Serial.printf("Line (%d, %d) %d pixels skipping %d\n", x, y, w, skip);
 
     uint16_t buf565[2][w];
     bool first = true; // First write op on this line?
@@ -249,16 +273,15 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
 #endif
               first = false;
             }
-            arcada.display->setAddrWindow(x + startColumn, y, n, 1);
-            arcada.display->writePixels(ptr, n, false, true);
+            arcada.display->setAddrWindow(x + startColumn, y, min(maxline, n), 1);
+            arcada.display->writePixels(ptr, min(maxline, n), false, true);
 #ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
-            if (dual_gif_action == 0) { // same image on both!
-              arcada.display2->setAddrWindow(x + startColumn, y, n, 1);
-              arcada.display2->writePixels(ptr, n, false, true);
-            }
-            if (dual_gif_action == 1) {
-              arcada.display2->setAddrWindow(x + startColumn, y, n, 1);
-              
+            if (! splitdisplay) { // same image on both!
+              arcada.display2->setAddrWindow(x + startColumn, y, min(maxline, n), 1);
+              arcada.display2->writePixels(ptr, min(maxline, n), false, true);
+            } else {
+              arcada.display2->setAddrWindow(x + startColumn, y, n-maxline, 1);
+              arcada.display2->writePixels(ptr+maxline, n-maxline, false, true);
             }
 #endif
             bufidx = 1 - bufidx;
