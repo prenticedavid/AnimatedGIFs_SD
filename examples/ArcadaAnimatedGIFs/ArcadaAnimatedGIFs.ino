@@ -60,6 +60,7 @@ void setup() {
   
   Serial.begin(115200);
   Serial.println("Animated GIFs Demo");
+  
   arcada.displayBegin();
   arcada.display->fillScreen(ARCADA_BLUE);
 #ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
@@ -180,6 +181,9 @@ void loop() {
         arcada.display2->dmaWait();
         arcada.display2->endWrite();   // End transaction from any prior callback
         arcada.display2->fillScreen(ARCADA_BLACK);
+        // speed up them pixels!
+        SPI.setClockSource(SERCOM_CLOCK_SOURCE_100M);
+        SPI1.setClockSource(SERCOM_CLOCK_SOURCE_100M);
 #endif
         decoder.startDecoding();
 
