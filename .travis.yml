@@ -32,6 +32,7 @@ install:
    - arduino --install-library "Adafruit ImageReader Library"
    - arduino --install-library "ArduinoJson"
    - arduino --install-library "Adafruit MSA301"
+   - arduino --install-library "Adafruit BusIO"
 
 script:
    - build_arcada_platforms
