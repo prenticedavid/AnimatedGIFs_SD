@@ -3,6 +3,12 @@
 #include <Adafruit_Arcada.h>
 #include "GifDecoder.h"
 
+//#define SERVOPIN 3   // uncomment to use a servo at the same time
+#ifdef SERVOPIN
+  #include <Servo.h>
+  Servo myservo;
+#endif
+
 /*************** Display setup */
 Adafruit_Arcada arcada;
 #ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
@@ -91,6 +97,12 @@ void setup() {
     displayTimeSeconds = arcada.configJSON["seconds_per_gif"];
   }
   Serial.printf("Playing GIFs for at least %d seconds per\n", displayTimeSeconds);
+
+#ifdef SERVOPIN
+  // example of how to have a servo move at the same time
+  myservo.attach(SERVOPIN);
+  myservo.write(70);
+#endif
 }
 
 uint32_t fileStartTime = displayTimeSeconds * -1001;
