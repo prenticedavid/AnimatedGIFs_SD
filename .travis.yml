@@ -31,6 +31,7 @@ install:
    - arduino --install-library "SdFat - Adafruit Fork"
    - arduino --install-library "Adafruit ImageReader Library"
    - arduino --install-library "ArduinoJson"
+   - arduino --install-library "Adafruit MSA301"
 
 script:
    - build_arcada_platforms
