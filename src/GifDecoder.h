@@ -76,7 +76,7 @@ private:
     int readByte(void);
 
     void lzw_decode_init(int csize);
-    int lzw_decode(uint8_t *buf, int len, uint8_t *bufend, int align = 0);  //.kbv
+    int lzw_decode(uint8_t *buf, int len, uint8_t *bufend); //, int align = 0);  //.kbv
     void lzw_setTempBuffer(uint8_t * tempBuffer);
     int lzw_get_code(void);
 
@@ -155,6 +155,7 @@ private:
     int slot;                   // Last read code
     int fc, oc;
     int bs;                     // Current buffer size for GIF
+    int next_bs; // next block size
     int bcnt;
     uint8_t *sp;
     uint8_t * temp_buffer;

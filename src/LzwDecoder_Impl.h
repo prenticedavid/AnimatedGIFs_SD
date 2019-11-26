@@ -52,6 +52,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode_init (int csi
     bbuf = 0;
     bbits = 0;
     bs = 0;
+    next_bs = -1;
     bcnt = 0;
 
     // Initialize decoder variables
@@ -68,14 +69,20 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode_init (int csi
 
 //  Get one code of given number of bits from stream
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
-int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_get_code() {
+inline int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_get_code() {
 
     while (bbits < cursize) {
         if (bcnt == bs) {
-            // get number of bytes in next block
-            readIntoBuffer(temp_buffer, 1);
-            bs = temp_buffer[0];
-            readIntoBuffer(temp_buffer, bs);
+            if (bs == 0) // first time through, we don't know the next block size
+            {
+                readIntoBuffer(temp_buffer, 1);
+                bs = temp_buffer[0];
+            }
+            else
+            {
+                bs = temp_buffer[bs];
+            }
+            readIntoBuffer(temp_buffer, bs+1);
             bcnt = 0;
         }
         bbuf |= temp_buffer[bcnt] << bbits;
@@ -94,9 +101,14 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_get_code() {
 //   returns the number of bytes decoded
 // .kbv add optional number of pixels to skip i.e. align
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
-int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, int len, uint8_t *bufend, int align) {
+int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, int len, uint8_t *bufend) /*, int align)*/ {
     int l, c, code;
-
+    // Local copies of member vars allow the compiler to put them in registers
+    const int newcode_l = newcodes;
+    uint8_t *sp_l = sp;
+    int top_slot_l = top_slot;
+    int slot_l = slot;
+    
 #if LZWDEBUG == 1
     unsigned char debugMessagePrinted = 0;
 #endif
@@ -107,12 +119,12 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
     l = len;
 
     for (;;) {
-        while (sp > stack) {
-            uint8_t q = *(--sp);     //.kbv pull off stack anyway
+        while (sp_l > stack) {
+            uint8_t q = *(--sp_l);     //.kbv pull off stack anyway
             // load buf with data if we're still within bounds
-            if (align > 0) align--;
-            else if (buf < bufend) {
-                *buf++ = q;
+//            if (align > 0) align--;
+         /*   else*/ if (buf < bufend) {
+                *buf++ = q; // a decent amount of time is spent here, but it's needed to reverse the output of the lzw compressed strings
             } else {
                 // out of bounds, keep incrementing the pointers, but don't use the data
 #if LZWDEBUG == 1
@@ -122,10 +134,13 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
 #endif
             }
             if ((--l) == 0) {
+                sp = sp_l; // store them back in the member vars
+                slot = slot_l;
+                top_slot = top_slot_l;
                 return len;
             }
         }
-        c = lzw_get_code();
+        c = lzw_get_code(); // about 15% of the time is spent here
         if (c == end_code) {
             break;
 
@@ -133,35 +148,38 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
         else if (c == clear_code) {
             cursize = codesize + 1;
             curmask = mask[cursize];
-            slot = newcodes;
-            top_slot = 1 << cursize;
+            slot_l = newcodes;
+            top_slot_l = 1 << cursize;
             fc = oc = -1;
 
         }
         else    {
 
             code = c;
-            if ((code == slot) && (fc >= 0)) {
-                *sp++ = fc;
+            if ((code == slot_l) && (fc >= 0)) {
+                *sp_l++ = fc;
                 code = oc;
             }
-            else if (code >= slot) {
+            else if (code >= slot_l) {
                 break;
             }
-            while (code >= newcodes) {
-                *sp++ = suffix[code];
+            // Most of the time is spent in this loop
+            // It's hard to make it go faster because the results of the load
+            // are used/tested immediately - which causes several pipeline stalls
+            while (code >= newcode_l) {
+                *sp_l++ = suffix[code];
                 code = prefix[code];
             }
-            *sp++ = code;
-            if ((slot < top_slot) && (oc >= 0)) {
-                suffix[slot] = code;
-                prefix[slot++] = oc;
+            *sp_l++ = code;
+            if ((slot_l < top_slot_l) && (oc >= 0)) {
+                suffix[slot_l] = code;
+                prefix[slot_l++] = oc;
             }
             fc = code;
             oc = c;
-            if (slot >= top_slot) {
+            if (slot_l >= top_slot_l) {
                 if (cursize < lzwMaxBits) {
-                    top_slot <<= 1;
+                    top_slot_l <<= 1;
                     curmask = mask[++cursize];
                 } else {
 #if LZWDEBUG == 1
@@ -176,5 +194,8 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
         }
     }
     end_code = -1;
+    sp = sp_l;
+    slot = slot_l;
+    top_slot = top_slot_l;
     return len - l;
 }
