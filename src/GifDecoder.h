@@ -151,18 +151,18 @@ private:
     int end_code;
     int newcodes;               // First available code
     int top_slot;               // Highest code for current size
-    int extra_slot;
     int slot;                   // Last read code
     int fc, oc;
     int bs;                     // Current buffer size for GIF
-    int next_bs; // next block size
     int bcnt;
     uint8_t *sp;
     uint8_t * temp_buffer;
 
     uint8_t stack  [LZW_SIZTABLE];
-    uint8_t suffix [LZW_SIZTABLE];
-    uint16_t prefix [LZW_SIZTABLE];
+    uint8_t suffix_prefix[LZW_SIZTABLE * 3]; // combine for quicker access
+
+//    uint8_t suffix [LZW_SIZTABLE];
+//    uint16_t prefix [LZW_SIZTABLE];
 
     // Masks for 0 .. 16 bits
     unsigned int mask[17] = {
