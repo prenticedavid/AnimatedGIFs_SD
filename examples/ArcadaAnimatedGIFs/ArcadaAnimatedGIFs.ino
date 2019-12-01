@@ -272,8 +272,15 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         int n = 0, startColumn = i;
         ptr = &buf565[bufidx][0];
         // Handle opaque span of pixels (stop at end of line or first transparent pixel)
-        while((i < w) && ((pixel = buf[i++]) != skip)) {
+        if (skip == -1) {// no transparent pixels
+          while(i < w) {
+            ptr[n++] = palette[buf[i++]];
+          }
+        }
+        else {
+          while((i < w) && ((pixel = buf[i++]) != skip)) {
             ptr[n++] = palette[pixel];
+          }
         }
         if (n) {
             arcada.display->dmaWait(); // Wait for prior DMA transfer to complete
@@ -303,7 +310,7 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             bufidx = 1 - bufidx;
         }
     }
-    arcada.display->dmaWait(); // Wait for last DMA transfer to complete
+//    arcada.display->dmaWait(); // Wait for last DMA transfer to complete
 #ifdef ADAFRUIT_MONSTER_M4SK_EXPRESS
     arcada.display2->dmaWait(); // Wait for last DMA transfer to complete
 #endif
