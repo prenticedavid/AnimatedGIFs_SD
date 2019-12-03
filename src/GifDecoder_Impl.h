@@ -33,12 +33,6 @@
 #elif defined (SPARK)
 #include "application.h"
 #endif
-#if __APPLE__
-#include <string.h>
-#include <stdio.h>
-#include <mach/mach_time.h>
-#include <mach/mach.h>
-#endif // _APPLE__
 
 #include "GifDecoder.h"
 
@@ -93,10 +87,6 @@
 #define DISPOSAL_LEAVE      1
 #define DISPOSAL_BACKGROUND 2
 #define DISPOSAL_RESTORE    3
-
-#if __APPLE__
-extern int64_t micros();
-#endif
 
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::setStartDrawingCallback(callback f) {
@@ -156,11 +146,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readByte() {
     int b = fileReadCallback();
     if (b == -1) {
 #if GIFDEBUG == 1
-#if __APPLE__
-        printf("Read error or EOF occurred\n");
-#else
         Serial.println("Read error or EOF occurred");
-#endif
 #endif
     }
     return b;
@@ -181,11 +167,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 
     int result = fileReadBlockCallback(buffer, numberOfBytes);
     if (result == -1) {
-#if __APPLE__
-        printf("Read error or EOF occurred\n");
-#else
         Serial.println("Read error or EOF occurred");
-#endif
     }
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
@@ -341,11 +323,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseGraphicControlExten
 #endif
     int len = readByte();   // Check length
     if (len != 4) {
-        #if __APPLE__
-        printf("Bad graphic control extension\n");
-        #else
         Serial.println("Bad graphic control extension");
-#endif
     }
 
     int packedBits = readByte();
@@ -359,11 +337,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseGraphicControlExten
     disposalMethod = (packedBits >> 2) & 7;
     if (disposalMethod > 3) {
         disposalMethod = 0;
-        #if __APPLE__
-        printf("Invalid disposal value\n");
-        #else
         Serial.println("Invalid disposal value");
-#endif
     }
 
     readByte(); // Toss block end
@@ -456,11 +430,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseGIFFileTerminator() 
         Serial.print("Terminator byte: ");
         Serial.println(b, HEX);
 #endif
-#if __APPLE__
-        printf("Bad GIF file format - Bad terminator\n");
-#else
         Serial.println("Bad GIF file format - Bad terminator");
-#endif
         return ERROR_BADGIFFORMAT;
     }
     else    {
@@ -710,12 +680,8 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseData() {
                     parseApplicationExtension();
                     break;
                 default:
-#if __APPLE__
-                    printf("Unknown control extension: %02x\n", b);
-#else
                     Serial.print("Unknown control extension: ");
                     Serial.println(b, HEX);
-#endif
                     return ERROR_UNKNOWNCONTROLEXT;
             }
         }
@@ -745,11 +711,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
 
     // Validate the header
     if (! parseGifHeader()) {
-#ifdef __APPLE__
-        printf("Not a GIF file\n");
-#else
         Serial.println("Not a GIF file");
-#endif
         return ERROR_FILENOTGIF;
     }
     // If we get here we have a gif file to process
@@ -769,13 +731,9 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(bool delayAft
     _delayAfterDecode = delayAfterDecode;
     int result = parseData();
     if (result < ERROR_NONE) {
-#ifdef __APPLE__
-        printf("Error:\n%d\noccurred during parsing of data\n", result);
-#else
         Serial.println("Error: ");
         Serial.println(result);
         Serial.println(" occurred during parsing of data");
-#endif
         return result;
     }
 
@@ -912,11 +870,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
 //            int align = 0;
             int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1); //, align);
             if (len != tbiWidth)
- #ifdef __APPLE__
-                printf("%d\n", len);
- #else
                 Serial.println(len);
-#endif
             int xofs = (disposalMethod == DISPOSAL_BACKGROUND) ? 0 : tbiImageX;
             int wid = (disposalMethod == DISPOSAL_BACKGROUND) ? lsdWidth : tbiWidth;
             int skip = (disposalMethod == DISPOSAL_BACKGROUND) ? -1 : transparentColorIndex;;
