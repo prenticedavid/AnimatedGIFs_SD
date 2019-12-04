@@ -167,6 +167,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::lzw_decode(uint8_t *buf, 
             if (bcnt > bs) {// check for an odd byte at the end of the buffer
                 bcnt--;
                 bbits -= 8; // last odd byte
+                bbuf_l &= (0xffffffff >> (32 - bbits));
             }
         }
         c = bbuf_l;
