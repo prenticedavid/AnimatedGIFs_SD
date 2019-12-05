@@ -26,7 +26,7 @@
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#define GIFDEBUG 2
+//#define GIFDEBUG 2
 
 #if defined (ARDUINO)
 #include <Arduino.h>
@@ -87,8 +87,6 @@
 #define DISPOSAL_LEAVE      1
 #define DISPOSAL_BACKGROUND 2
 #define DISPOSAL_RESTORE    3
-
-
 
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::setStartDrawingCallback(callback f) {
@@ -588,12 +586,10 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
         Serial.print("dataBlockSize: ");
         Serial.println(dataBlockSize);
 #endif
-        backUpStream(1);
-        dataBlockSize++;
-        fileSeekCallback(filePositionCallback() + dataBlockSize);
-
-        offset += dataBlockSize;
-        dataBlockSize = readByte();
+        offset += dataBlockSize + 1;
+        // Reading is much faster than seeking
+        fileReadBlockCallback(tempBuffer, dataBlockSize+1);
+        dataBlockSize = (uint8_t)tempBuffer[dataBlockSize];
     }
 
 #if GIFDEBUG == 1 && DEBUG_PROCESSING_TBI_DESC_LZWIMAGEDATA_SIZE == 1
@@ -871,9 +867,10 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
 //            int ofs = tbiImageX - align;
 //            uint8_t *dst = (ofs < 0) ? imageBuf : imageBuf + ofs;
 //            align = (ofs < 0) ? -ofs : 0;
-            int align = 0;
-            int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1, align);
-            if (len != tbiWidth) Serial.println(len);
+//            int align = 0;
+            int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1); //, align);
+            if (len != tbiWidth)
+                Serial.println(len);
             int xofs = (disposalMethod == DISPOSAL_BACKGROUND) ? 0 : tbiImageX;
             int wid = (disposalMethod == DISPOSAL_BACKGROUND) ? lsdWidth : tbiWidth;
             int skip = (disposalMethod == DISPOSAL_BACKGROUND) ? -1 : transparentColorIndex;;

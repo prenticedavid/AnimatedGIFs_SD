@@ -24,6 +24,8 @@ int16_t  gif_offset_x, gif_offset_y;
 
 // Setup method runs once, when the sketch starts
 void setup() {
+  Serial.begin(115200);
+  Serial.println("Animated GIFs Demo");
   decoder.setScreenClearCallback(screenClearCallback);
   decoder.setUpdateScreenCallback(updateScreenCallback);
   decoder.setDrawPixelCallback(drawPixelCallback);
@@ -55,8 +57,6 @@ void setup() {
     
   //while (!Serial) delay(10);
   
-  Serial.begin(115200);
-  Serial.println("Animated GIFs Demo");
   arcada.displayBegin();
   arcada.display->fillScreen(ARCADA_BLUE);
   arcada.setBacklight(255);
@@ -74,17 +74,17 @@ int currFrame, lastFrame = -1;
 int currButton, lastButton = true;
 
 void loop() {
-  if (arcada.recentUSB()) { 
+//  if (arcada.recentUSB()) { 
     nextGIF = 1;  // restart when we get back
-    return;       // prioritize USB over GIF decoding
-  }
+//    return;       // prioritize USB over GIF decoding
+//  }
 
   // Check button presses
-  currButton = digitalRead(PIN_ENCODER_SWITCH);
-  if (! lastButton && currButton) {
-    nextGIF = 1;   // forward      
-  }
-  lastButton = currButton;
+//  currButton = digitalRead(PIN_ENCODER_SWITCH);
+//  if (! lastButton && currButton) {
+//    nextGIF = 1;   // forward      
+//  }
+//  lastButton = currButton;
 
   int buttons = 0;
   
@@ -106,7 +106,7 @@ void loop() {
       if (file_index >= num_files) {
         file_index = 0;                // wrap around to first file
       }
-      if (file_index < 0) {
+      if (file_index < 0)  {
         file_index = num_files-1;      // wrap around to last file
       }
       nextGIF = 0; // and we're done moving between GIFs
@@ -149,7 +149,10 @@ void loop() {
         if (frameCount >= MAX_GIF_FRAMES) {
           arcada.haltBox("Too many frames in this GIF to handle - please update MAX_GIF_FRAMES!");
         }
+        unsigned long ulTime = millis();
         decoder.decodeFrame();
+        ulTime = millis() - ulTime;
+        Serial.print("Decode time = "); Serial.print((int)ulTime, DEC); Serial.println("ms");
         lastFrame = currFrame;
       }
       currFrame = lastFrame = 0;
@@ -185,7 +188,7 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
     uint8_t pixel;
-    uint32_t t = millis();
+//    uint32_t t = millis();
     x += gif_offset_x;
     y += gif_offset_y;
     if (y >= arcada.display->height() || x >= arcada.display->width() ) return;
@@ -202,8 +205,18 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         int n = 0, startColumn = i;
         ptr = &buf565[bufidx][0];
         // Handle opaque span of pixels (stop at end of line or first transparent pixel)
-        while((i < w) && ((pixel = buf[i++]) != skip)) {
-            ptr[n++] = palette[pixel];
+        // It nearly doubles the speed of this function to treat opaque and transparent pixels differently
+        if (skip == -1) { // no transparent pixels
+          while (i < w) {
+            *ptr++ = palette[buf[i++]];
+          }
+          n = w;
+          ptr = &buf565[bufidx][0];
+        }
+        else {
+          while((i < w) && ((pixel = buf[i++]) != skip)) {
+              ptr[n++] = palette[pixel];
+          }
         }
         if (n) {
             arcada.display->dmaWait(); // Wait for prior DMA transfer to complete
@@ -217,7 +230,8 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
             bufidx = 1 - bufidx;
         }
     }
-    arcada.display->dmaWait(); // Wait for last DMA transfer to complete
+// waiting for DMA here defeats the purpose of it
+//    arcada.display->dmaWait(); // Wait for last DMA transfer to complete
 }
 
 
