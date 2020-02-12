@@ -59,7 +59,7 @@
 
 #endif
 
-#include "GifDecoder.h"
+//#include "GifDecoder.h"
 
 
 // Error codes
@@ -250,6 +250,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseLogicalScreenDescri
     lsdBackgroundIndex = readByte();
     lsdAspectRatio = readByte();
     frameCount = (cycleNo) ? frameNo : 0;  //.kbv
+    frameNo = 0;                           //.kbv
     cycleNo++;                             //.kbv
 
 #if GIFDEBUG == 1 && DEBUG_SCREEN_DESCRIPTOR == 1
@@ -607,9 +608,15 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
     lzw_setTempBuffer((uint8_t*)tempBuffer);
 
     // Make sure there is at least some delay between frames
+#if 1
+    if (frameDelay < 2) {
+        frameDelay = 2;
+    }
+#else
     if (frameDelay < 1) {
         frameDelay = 1;
     }
+#endif
 
     // Decompress LZW data and display the frame
     decompressAndDisplayFrame(filePositionAfter);
@@ -700,7 +707,6 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
     // Initialize variables
     keyFrame = true;
     cycleNo = 0;
-    cycleTime = 0;
     prevDisposalMethod = DISPOSAL_NONE;
     transparentColorIndex = NO_TRANSPARENT_INDEX;
     nextFrameTime_ms = 0;
@@ -833,7 +839,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     int starts[] = {0, 4, 2, 1, 0};
     int incs[]   = {8, 8, 4, 2, 1};
     frameNo++;
-#if GIFDEBUG > 1
+#if GIFDEBUG > 2
     char buf[80];
     unsigned long filePositionBefore = filePositionCallback();
     if (frameNo == 1) {
@@ -843,13 +849,12 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
         Serial.println(buf);
     }
 #endif
-#if GIFDEBUG > 2
+#if GIFDEBUG > 3
     sprintf(buf, "Frame %2d: [=%6ld P:0x%02X B:%d F:%dms] @ %d,%d %dx%d ms:",
             frameNo, filePositionBefore, tbiPackedBits, transparentColorIndex, frameDelay * 10,
             tbiImageX, tbiImageY, tbiWidth, tbiHeight);
     Serial.print(buf);
-    delay(10);    //allow Serial to complete @ 115200 baud
-    int32_t t = millis();
+    //delay(10);    //allow Serial to complete @ 115200 baud.  Serial ISR() should be trivial. 
 #endif
     for (int state = 0; state < 4; state++) {
         if (tbiInterlaced == 0) state = 4; //regular does one pass
@@ -879,10 +884,12 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     }
     // LZW doesn't parse through all the data, manually set position
     fileSeekCallback(filePositionAfter);
-#if GIFDEBUG > 2
-    Serial.println(millis() - t);
+#if GIFDEBUG > 3
+    extern int32_t parse_start;
+    Serial.println((micros() - parse_start) / 1000);
 #endif
 #endif
+/*
     // Make animation frame visible
     // swapBuffers() call can take up to 1/framerate seconds to return (it waits until a buffer copy is complete)
     // note the time before calling
@@ -892,8 +899,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
 
     // calculate time to display next frame
     nextFrameTime_ms = millis() + (10 * frameDelay);
-    cycleTime += 10 * frameDelay;
     if (updateScreenCallback)
         (*updateScreenCallback)();
+*/
 }
-
