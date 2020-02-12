@@ -1,5 +1,6 @@
 // 08.02.2020 added 0xF37735 for ST7735_t3
-// 08.02.2020 pushColors(... bigend) for ILI9341_due 
+// 08.02.2020 pushColors(... bigend) for ILI9341_due
+// 09.02.2020 SD_CS=10 for MCUFRIEND_kbv 
 
 #if 0
 #elif defined(STM32F1xx) && defined(BLUEPILL)
@@ -21,6 +22,7 @@
 #define TFT_CS  D10
 #define TFT_DC  D9
 #define TFT_RST D8
+#define SD_CS   D4
 #else
 #define TFT_CS  10
 #define TFT_DC  9
@@ -64,6 +66,7 @@ ST7789_kbv tft(0x9488, 320, 480);
 #elif USE_TFT_LIB == 0x0000 //MCUFRIEND detects the controller
 #include <MCUFRIEND_kbv.h>
 MCUFRIEND_kbv tft;
+#define SD_CS  10
 
 #elif USE_TFT_LIB == 0xA7735   //repeat for 7735, 7789, 9341, ...
 #include <Adafruit_ST7735.h>
