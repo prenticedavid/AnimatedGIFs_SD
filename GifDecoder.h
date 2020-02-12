@@ -33,9 +33,10 @@ class GifDecoder {
 public:
     int startDecoding(void);
     int decodeFrame(void);
-    int getCycleTime(void) { return cycleTime; }  //.kbv
     int getCycleNo(void) { return cycleNo; }  //.kbv
+    int getFrameNo(void) { return frameNo; }  //.kbv
     int getFrameCount(void) { return frameCount; }  //.kbv
+    int getFrameDelay_ms(void) { return frameDelay * 10; }  //.kbv
     
     void setScreenClearCallback(callback f);
     void setUpdateScreenCallback(callback f);
@@ -99,10 +100,9 @@ private:
     int rectY;
     int rectWidth;
     int rectHeight;
-    int cycleNo; //.kbv
-    int cycleTime;
-    int frameNo; //.kbv
-    int frameCount; //.kbv
+    int cycleNo; //.kbv complete animations
+    int frameNo; //.kbv which frame in animation
+    int frameCount; //.kbv how many frames per complete animation
 //    int frameSize; //.kbv
 
     unsigned long nextFrameTime_ms;
@@ -165,8 +165,11 @@ private:
     };
 };
 
-#include "GifDecoder_Impl.h"
-#include "LzwDecoder_Impl.h"
+//.kbv I really, really do not like this.   All the defines from the xxx_Impl.h files are read before setup() and loop()
+//.kbv I suppose that you could include at the end of AnimatedGIFs_SD.ino
+//.kbv I am happier with adding a statement to CPP file e.g. template class GifDecoder<480, 320, 12>;   // .kbv tell the world.
+
+//#include "GifDecoder_Impl.h"
+//#include "LzwDecoder_Impl.h"
 
 #endif
-
