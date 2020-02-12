@@ -1,14 +1,17 @@
 // please read credits at the bottom of file
 
-//#include <SD.h>
+#define USE_TFT_LIB 0xE8266
+
 #ifndef min
 #define min(a, b) (((a) <= (b)) ? (a) : (b))
 #endif
 #include "GifDecoder.h"
 #include "FilenameFunctions.h"    //defines USE_SPIFFS
 
-#define DISPLAY_TIME_SECONDS 80
-#define GIFWIDTH 480 //228 fails on COW_PAINT
+#define DISPLAY_TIME_SECONDS 100  //
+#define NUMBER_FULL_CYCLES     3  //
+#define GIFWIDTH             480  //228 fails on COW_PAINT.  Edit class_implementation.cpp
+#define FLASH_SIZE      512*1024  //     
 
 /*  template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
 
@@ -23,59 +26,13 @@ GifDecoder<GIFWIDTH, 320, 12> decoder;
 #define GIF_DIRECTORY "/"     //ESP8266 SPIFFS
 #define DISKCOLOUR   CYAN
 #else
-//#define GIF_DIRECTORY "/gifs"
+#define GIF_DIRECTORY "/gifs"
 //#define GIF_DIRECTORY "/gifs32"
-#define GIF_DIRECTORY "/gifsdbg"
+//#define GIF_DIRECTORY "/gifsdbg"
 #define DISKCOLOUR   BLUE
 #endif
 
-#if defined(ESP32)
-#define SD_CS 17
-#include <SPI.h>
-#include <TFT_eSPI.h>
-TFT_eSPI tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(ESP8266)
-#define SD_CS D4
-#include <SPI.h>
-#include <TFT_eSPI.h>
-#include <FS.h>
-TFT_eSPI tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(_TEENSYDUINO) || defined(_ARDUINO_NUCLEO_L476RG)
-#define SD_CS 4
-#include <SPI.h>
-#include <ILI9341_kbv.h>
-ILI9341_kbv tft;
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColors(&x, 1, first)
-#define PUSHCOLORS(buf, n) tft.pushColors(buf, n, first)
-#elif defined(_TEENSYDUINO)
-#define SD_CS 4
-#include <SPI.h>
-#include <Adafruit_ST7735.h>
-Adafruit_ST7735 tft(10, 9, 8);
-#define color565 Color565
-#define TFTBEGIN() tft.initR(INITR_BLACKTAB)
-#define PUSHCOLOR(x) tft.pushColor(x)
-#elif defined(ARDUINO_SAM_DUE)
-#define SD_CS 4
-#include <SPI.h>
-#include <ILI9341_due.h>
-ILI9341_due tft(10, 9, 8);
-#define TFTBEGIN() tft.begin()
-#define PUSHCOLOR(x) tft.pushColor(x)
-#else
-// Chip select for SD card on the SmartMatrix Shield or Photon
-#define SD_CS SS
-#include <MCUFRIEND_kbv.h>
-MCUFRIEND_kbv tft;
-#define TFTBEGIN() tft.begin(tft.readID())
-#define PUSHCOLOR(x) tft.pushColors(&(x), 1, first)
-#define PUSHCOLORS(buf, n) tft.pushColors(buf, n, first)
-#endif
+#include "USE_TFT_LIB.h"
 
 // Assign human-readable names to some common 16-bit color values:
 #define BLACK   0x0000
@@ -91,10 +48,15 @@ int num_files;
 long rowCount;  //.kbv
 long plotCount; //.kbv
 long skipCount; //.kbv
+long lineTime;  //.kbv
+int32_t parse_start; //.kbv
 
 #include "gifs_128.h"
 #include "wrong_gif.h"
 #include "llama_gif.h"
+#include "mad_man_gif.h"
+#include "mad_race_gif.h"
+
 
 #define M0(x) {x, #x, sizeof(x)}
 typedef struct {
@@ -103,19 +65,37 @@ typedef struct {
     uint32_t sz;
 } gif_detail_t;
 gif_detail_t gifs[] = {
+#if FLASH_SIZE >= 1024 * 1024      //Teensy4.0, ESP32, F767, L476
 
+    M0(llama_driver_gif),          //758945
+    M0(teakettle_128x128x10_gif),  // 21155
+    M0(bottom_128x128x17_gif),     // 51775
+    M0(globe_rotating_gif),        // 90533
+
+    //    M0(mad_man_gif),               //711166
+    M0(mad_race_gif),              //173301
+    //    M0(marilyn_240x240_gif),       // 40843
+    //    M0(cliff_100x100_gif),   //406564
+#elif FLASH_SIZE >= 512 * 1024     // Due, F446, ESP8266
+    M0(teakettle_128x128x10_gif),  // 21155
+    M0(bottom_128x128x17_gif),     // 51775
+    M0(globe_rotating_gif),        // 90533
+    M0(mad_race_gif),              //173301
+    //    M0(marilyn_240x240_gif),       // 40843
+    M0(horse_128x96x8_gif),        //  7868
+#elif FLASH_SIZE >= 256 * 1024     //Teensy3.2, Zero
+    M0(teakettle_128x128x10_gif),  // 21155
+    M0(bottom_128x128x17_gif),     // 51775
+    //    M0(globe_rotating_gif),        // 90533
+    M0(mad_race_gif),              //173301
+    M0(horse_128x96x8_gif),        //  7868
+#else
     M0(teakettle_128x128x10_gif),  // 21155
     M0(globe_rotating_gif),        // 90533
     M0(bottom_128x128x17_gif),     // 51775
     M0(irish_cows_green_beer_gif), // 29798
-#if !defined(TEENSYDUINO)
     M0(horse_128x96x8_gif),        //  7868
 #endif
-#if defined(ESP32)
-    M0(llama_driver_gif),    //758945
-#endif
-    //    M0(marilyn_240x240_gif),       // 40843
-    //    M0(cliff_100x100_gif),   //406564
 };
 
 const uint8_t *g_gif;
@@ -169,6 +149,7 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip) {
     uint8_t pixel;
     bool first;
+    int32_t t = micros();
     if (y >= tft.height() || x >= tft.width() ) return;
     if (x + w > tft.width()) w = tft.width() - x;
     if (w <= 0) return;
@@ -187,33 +168,40 @@ void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *p
         if (n) {
             tft.setAddrWindow(x + i - n, y, endx, y);
             first = true;
-#ifdef PUSHCOLORS
-            PUSHCOLORS(buf565, n);
-#else
-            for (int j = 0; j < n; j++) PUSHCOLOR(buf565[j]);
-#endif
+            tft.pushColors(buf565, n, first);
         }
     }
     plotCount += w;  //count total pixels (including skipped)
     rowCount += 1;   //count number of drawLines
+    lineTime += micros() - t;
 }
 
 // Setup method runs once, when the sketch starts
 void setup() {
+    char msg[80];
+    Serial.begin(115200);
+    while (!Serial) ;
+    Serial.println("\nAnimatedGIFs_SD");
+    tft.begin(tft.readID());
+    tft.setRotation(1);
+    tft.fillScreen(BLACK);
     decoder.setScreenClearCallback(screenClearCallback);
     decoder.setUpdateScreenCallback(updateScreenCallback);
     decoder.setDrawPixelCallback(drawPixelCallback);
     decoder.setDrawLineCallback(drawLineCallback);
 
-    decoder.setFileSeekCallback(fileSeekCallback);
-    decoder.setFilePositionCallback(filePositionCallback);
-    decoder.setFileReadCallback(fileReadCallback);
-    decoder.setFileReadBlockCallback(fileReadBlockCallback);
-
-    Serial.begin(115200);
-    Serial.println("AnimatedGIFs_SD");
-    if (initSdCard(SD_CS) < 0) {
-        Serial.println("No SD card");
+    int ret = initSdCard(SD_CS);
+    if (ret == 0) {
+        decoder.setFileSeekCallback(fileSeekCallback);
+        decoder.setFilePositionCallback(filePositionCallback);
+        decoder.setFileReadCallback(fileReadCallback);
+        decoder.setFileReadBlockCallback(fileReadBlockCallback);
+        num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
+    }
+    if (ret != 0 || num_files == 0) {
+        if (num_files == 0) sprintf(msg, "No GIF files on SD card");
+        else sprintf(msg, "No SD card on CS:%d", SD_CS);
+        Serial.println(msg);
         decoder.setFileSeekCallback(fileSeekCallback_P);
         decoder.setFilePositionCallback(filePositionCallback_P);
         decoder.setFileReadCallback(fileReadCallback_P);
@@ -222,57 +210,57 @@ void setup() {
         for (num_files = 0; num_files < sizeof(gifs) / sizeof(*gifs); num_files++) {
             Serial.println(gifs[num_files].name);
         }
-        //        while (1);
-    }
-    else {
-        num_files = enumerateGIFFiles(GIF_DIRECTORY, true);
     }
 
-    // Determine how many animated GIF files exist
-    Serial.print("Animated GIF files Found: ");
-    Serial.println(num_files);
-
-    if (num_files < 0) {
-        Serial.println("No gifs directory");
-        while (1);
-    }
-
-    if (!num_files) {
-        Serial.println("Empty gifs directory");
-        while (1);
-    }
-
-    TFTBEGIN();
-#ifdef _ILI9341_dueH_
-    tft.setRotation((iliRotation)1);
-#else
-    tft.setRotation(1);
-#endif
-    tft.fillScreen(BLACK);
+    sprintf(msg, "Animated GIF files Found: %d", num_files);
+    if (num_files < 0) sprintf(msg, "No directory on %s", GIF_DIRECTORY);
+    if (num_files == 0) sprintf(msg, "No GIFs on %s", GIF_DIRECTORY);
+    Serial.println(msg);
+    if (num_files > 0) return;
+    tft.fillScreen(RED);
+    tft.println(msg);
+    while (1) delay(10);  //does a yield()
 }
 
-
 void loop() {
-    static unsigned long futureTime, cycle_start;
+    static unsigned long futureTime, cycle_start, nextFrameTime, frame_time, frames;
 
     //    int index = random(num_files);
     static int index = -1;
 
-    if (futureTime < millis() || decoder.getCycleNo() > 1) {
-        char buf[80];
-        int32_t now = millis();
-        int32_t frames = decoder.getFrameCount();
-        int32_t cycle_design = decoder.getCycleTime();
-        int32_t cycle_time = now - cycle_start;
-        int32_t percent = (100 * cycle_design) / cycle_time;
-        int32_t skipcent = (100 * skipCount) / (plotCount);
-        sprintf(buf, "[%ld frames = %ldms] actual: %ldms speed: %ld%% plot: %ld [%ld%%] w=%ld",
-                frames, cycle_design, cycle_time, percent, plotCount, skipcent, plotCount/rowCount);
-        Serial.println(buf);
-        skipCount = plotCount = rowCount = 0L;
-        
+    int32_t now = millis();
+    if (now >= futureTime || decoder.getCycleNo() > NUMBER_FULL_CYCLES) {
+        char buf[100];
+        int32_t frameCount = decoder.getFrameCount();
+        if (frameCount > 0) {   //complete animation sequence
+            int32_t framedelay = decoder.getFrameDelay_ms();
+            int32_t cycle_design = framedelay * frameCount;
+            int32_t cycle_time = now - cycle_start;
+            int32_t percent = (100 * cycle_design) / cycle_time;
+            int32_t skipcent = plotCount ? (100 * skipCount) / (plotCount) : 0;
+            int32_t avg_wid = rowCount ? plotCount / rowCount : 0;
+            int32_t avg_ht = rowCount / frames;
+            percent = (100 * frames * framedelay) / (frame_time / 1000);
+            if (percent > 100) percent = 100;
+
+            sprintf(buf, "%3d frames @%3dms %3d%% [%3d] typ: %3dx%-3d ",
+                    frameCount, framedelay, percent, frames,
+                    avg_wid, avg_ht);
+            Serial.print(buf);
+
+            float map = 0.001 / frames;
+            char ft[10], dt[10];
+            dtostrf(frame_time * map, 5, 1, ft);
+            dtostrf(lineTime * map, 5, 1, dt);
+            sprintf(buf, "avg:%sms draw:%sms %d%%", ft, dt, skipcent);
+            Serial.println(buf);
+        }
+        skipCount = plotCount = rowCount = lineTime = frames = frame_time = 0L;
+
         cycle_start = now;
-        //        num_files = 2;
+        // Calculate time in the future to terminate animation
+        futureTime = now + (DISPLAY_TIME_SECONDS * 1000);
+
         if (++index >= num_files) {
             index = 0;
         }
@@ -287,12 +275,20 @@ void loop() {
 
             decoder.startDecoding();
 
-            // Calculate time in the future to terminate animation
-            futureTime = millis() + (DISPLAY_TIME_SECONDS * 1000);
         }
     }
 
+    parse_start = micros();
     decoder.decodeFrame();
+    yield();
+    frame_time += micros() - parse_start; //count it even if housekeeping block
+    if (decoder.getFrameNo() != 0) {  //don't count the header blocks.
+        frames++;
+        nextFrameTime = now + decoder.getFrameDelay_ms();
+        while (millis() <= nextFrameTime) yield();
+    }
+    yield();
+
 }
 
 /*
