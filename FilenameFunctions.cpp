@@ -51,12 +51,19 @@ int fileReadBlockCallback(void * buffer, int numberOfBytes) {
 }
 
 int initSdCard(int chipSelectPin) {
-    // initialize the SD card at full speed
-    pinMode(chipSelectPin, OUTPUT);
 #ifdef USE_SPIFFS
+    // if you want to force PROGMEM instead of SPIFFS,  1k pulldown on SD_CS pin.
+    pinMode(chipSelectPin, INPUT_PULLUP);
+    delay(10);
+    int state = digitalRead(chipSelectPin);
+    pinMode(chipSelectPin, OUTPUT);
+    if (state == 0) return -1;
     if (!SPIFFS.begin())
         return -1;
 #else
+    // if you want to force PROGMEM instead of SD,  remove the SD from socket.
+    // initialize the SD card at full speed
+    pinMode(chipSelectPin, OUTPUT);
     if (!SD.begin(chipSelectPin))
         return -1;
 #endif
@@ -212,4 +219,3 @@ void chooseRandomGIFFilename(const char *directoryName, char *pnBuffer) {
     int index = random(numberOfFiles);
     getGIFFilenameByIndex(directoryName, index, pnBuffer);
 }
-
