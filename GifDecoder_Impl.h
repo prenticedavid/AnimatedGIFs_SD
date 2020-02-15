@@ -251,6 +251,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseLogicalScreenDescri
     lsdAspectRatio = readByte();
     frameCount = (cycleNo) ? frameNo : 0;  //.kbv
     frameNo = 0;                           //.kbv
+    cycleTime = 0;                         //.kbv
     cycleNo++;                             //.kbv
 
 #if GIFDEBUG == 1 && DEBUG_SCREEN_DESCRIPTOR == 1
@@ -839,6 +840,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     int starts[] = {0, 4, 2, 1, 0};
     int incs[]   = {8, 8, 4, 2, 1};
     frameNo++;
+    cycleTime += (frameDelay < 2) ? 20 : frameDelay * 10;
 #if GIFDEBUG > 2
     char buf[80];
     unsigned long filePositionBefore = filePositionCallback();

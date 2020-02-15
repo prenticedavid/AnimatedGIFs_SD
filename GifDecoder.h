@@ -33,9 +33,10 @@ class GifDecoder {
 public:
     int startDecoding(void);
     int decodeFrame(void);
-    int getCycleNo(void) { return cycleNo; }  //.kbv
-    int getFrameNo(void) { return frameNo; }  //.kbv
-    int getFrameCount(void) { return frameCount; }  //.kbv
+    int getCycleNo(void) { return cycleNo; }  //.kbv complete animations
+    int getCycleTime(void) { return cycleTime; }  //.kbv ms for complete animations
+    int getFrameNo(void) { return frameNo; }  //.kbv which frame in animation
+    int getFrameCount(void) { return frameCount; }  //.kbv how many frames per complete animation
     int getFrameDelay_ms(void) { return frameDelay * 10; }  //.kbv
     
     void setScreenClearCallback(callback f);
@@ -101,6 +102,7 @@ private:
     int rectWidth;
     int rectHeight;
     int cycleNo; //.kbv complete animations
+    int cycleTime; //.kbv ms for complete animations
     int frameNo; //.kbv which frame in animation
     int frameCount; //.kbv how many frames per complete animation
 //    int frameSize; //.kbv
