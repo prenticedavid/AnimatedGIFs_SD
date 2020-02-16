@@ -26,7 +26,7 @@
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#define GIFDEBUG 2
+//#define GIFDEBUG 2
 
 #if defined (ARDUINO)
 #include <Arduino.h>
@@ -59,7 +59,7 @@
 
 #endif
 
-//#include "GifDecoder.h"
+#include "GifDecoder.h"
 
 
 // Error codes
@@ -87,8 +87,6 @@
 #define DISPOSAL_LEAVE      1
 #define DISPOSAL_BACKGROUND 2
 #define DISPOSAL_RESTORE    3
-
-
 
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::setStartDrawingCallback(callback f) {
@@ -174,10 +172,18 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 #if defined(USE_PALETTE565)
     if (buffer == palette) {
         for (int i = 0; i < 256; i++) {
+#if !defined(ARCADA_TFT_D0) && !defined(USE_SPI_DMA)
             uint8_t r = palette[i].red;
             uint8_t g = palette[i].green;
             uint8_t b = palette[i].blue;
             palette565[i] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
+#else
+            // Pre-endian-swap in the palette
+            palette565[i] = __builtin_bswap16(
+              ((palette[i].red   & 0xF8) << 8) |
+              ((palette[i].green & 0xFC) << 3) |
+              ((palette[i].blue        ) >> 3));
+#endif
         }
     }
 #endif
@@ -188,16 +194,16 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::readIntoBuffer(void *buff
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::fillImageDataRect(uint8_t colorIndex, int x, int y, int width, int height) {
 
-    int yOffset;
+#if NO_IMAGEDATA < 2
+    int yOffset = 0;
 
     for (int yy = y; yy < height + y; yy++) {
         yOffset = yy * maxGifWidth;
         for (int xx = x; xx < width + x; xx++) {
-#if NO_IMAGEDATA < 2
             imageData[yOffset + xx] = colorIndex;
-#endif
         }
     }
+#endif
 }
 
 // Fill entire imageData buffer with a color index
@@ -250,8 +256,6 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseLogicalScreenDescri
     lsdBackgroundIndex = readByte();
     lsdAspectRatio = readByte();
     frameCount = (cycleNo) ? frameNo : 0;  //.kbv
-    frameNo = 0;                           //.kbv
-    cycleTime = 0;                         //.kbv
     cycleNo++;                             //.kbv
 
 #if GIFDEBUG == 1 && DEBUG_SCREEN_DESCRIPTOR == 1
@@ -323,7 +327,7 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseGraphicControlExten
     }
 
     int packedBits = readByte();
-    frameDelay = readWord();
+    frameDelay = readWord(); // hundredths of a second
     transparentColorIndex = readByte();
 
     if ((packedBits & TRANSPARENTFLAG) == 0) {
@@ -582,12 +586,10 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
         Serial.print("dataBlockSize: ");
         Serial.println(dataBlockSize);
 #endif
-        backUpStream(1);
-        dataBlockSize++;
-        fileSeekCallback(filePositionCallback() + dataBlockSize);
-
-        offset += dataBlockSize;
-        dataBlockSize = readByte();
+        offset += dataBlockSize + 1;
+        // Reading is much faster than seeking
+        fileReadBlockCallback(tempBuffer, dataBlockSize+1);
+        dataBlockSize = (uint8_t)tempBuffer[dataBlockSize];
     }
 
 #if GIFDEBUG == 1 && DEBUG_PROCESSING_TBI_DESC_LZWIMAGEDATA_SIZE == 1
@@ -609,15 +611,9 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
     lzw_setTempBuffer((uint8_t*)tempBuffer);
 
     // Make sure there is at least some delay between frames
-#if 1
-    if (frameDelay < 2) {
-        frameDelay = 2;
-    }
-#else
-    if (frameDelay < 1) {
-        frameDelay = 1;
-    }
-#endif
+//    if (frameDelay < 1) {
+//        frameDelay = 1;
+//    }
 
     // Decompress LZW data and display the frame
     decompressAndDisplayFrame(filePositionAfter);
@@ -630,8 +626,8 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseTableBasedImage() {
 // Parse gif data
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseData() {
-    if (nextFrameTime_ms > millis())
-        return ERROR_WAITING;
+//    if (nextFrameTime_ms > millis())
+//        return ERROR_WAITING;
 
 #if GIFDEBUG == 1 && DEBUG_PARSING_DATA == 1
     Serial.println("\nParsing Data Block");
@@ -708,9 +704,10 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
     // Initialize variables
     keyFrame = true;
     cycleNo = 0;
+    cycleTime = 0;
     prevDisposalMethod = DISPOSAL_NONE;
     transparentColorIndex = NO_TRANSPARENT_INDEX;
-    nextFrameTime_ms = 0;
+    frameStartTime = micros();
     fileSeekCallback(0);
 
     // Validate the header
@@ -730,8 +727,9 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
 }
 
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
-int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
+int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(bool delayAfterDecode) {
     // Parse gif data
+    _delayAfterDecode = delayAfterDecode;
     int result = parseData();
     if (result < ERROR_NONE) {
         Serial.println("Error: ");
@@ -746,7 +744,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
         keyFrame = true;
         prevDisposalMethod = DISPOSAL_NONE;
         transparentColorIndex = NO_TRANSPARENT_INDEX;
-        nextFrameTime_ms = 0;
+        frameStartTime = micros();
         fileSeekCallback(0);
 
         // parse Gif Header like with a new file
@@ -765,6 +763,10 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decodeFrame(void) {
 // Decompress LZW data and display animation frame
 template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFrame(unsigned long filePositionAfter) {
+
+    // frameDelay is time to wait AFTER the frame is drawn...so, use value
+    // from prior pass. It's converted to microseconds here for better timing.
+    uint32_t priorFrameDelay = frameDelay * 10000;
 
     // Each pixel of image is 8 bits and is an index into the palette
 
@@ -841,22 +843,23 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     int incs[]   = {8, 8, 4, 2, 1};
     frameNo++;
     cycleTime += (frameDelay < 2) ? 20 : frameDelay * 10;
-#if GIFDEBUG > 2
+#if GIFDEBUG > 1
     char buf[80];
-    unsigned long filePositionBefore = filePositionCallback();
     if (frameNo == 1) {
         sprintf(buf, "Logical Screen [LZW=%d %dx%d P:0x%02X B:%d A:%d F:%dms] frames:%d pass=%d",
                 lzwCodeSize, lsdWidth, lsdHeight, lsdPackedField, lsdBackgroundIndex, lsdAspectRatio,
                 frameDelay * 10, frameCount, cycleNo);
         Serial.println(buf);
     }
-#endif
-#if GIFDEBUG > 3
+#if GIFDEBUG > 2
+    unsigned long filePositionBefore = filePositionCallback();
     sprintf(buf, "Frame %2d: [=%6ld P:0x%02X B:%d F:%dms] @ %d,%d %dx%d ms:",
             frameNo, filePositionBefore, tbiPackedBits, transparentColorIndex, frameDelay * 10,
             tbiImageX, tbiImageY, tbiWidth, tbiHeight);
     Serial.print(buf);
-    //delay(10);    //allow Serial to complete @ 115200 baud.  Serial ISR() should be trivial. 
+    delay(10);    //allow Serial to complete @ 115200 baud
+    int32_t t = millis();
+#endif
 #endif
     for (int state = 0; state < 4; state++) {
         if (tbiInterlaced == 0) state = 4; //regular does one pass
@@ -866,9 +869,10 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
 //            int ofs = tbiImageX - align;
 //            uint8_t *dst = (ofs < 0) ? imageBuf : imageBuf + ofs;
 //            align = (ofs < 0) ? -ofs : 0;
-            int align = 0;
-            int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1, align);
-            if (len != tbiWidth) Serial.println(len);
+//            int align = 0;
+            int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1); //, align);
+            if (len != tbiWidth)
+                Serial.println(len);
             int xofs = (disposalMethod == DISPOSAL_BACKGROUND) ? 0 : tbiImageX;
             int wid = (disposalMethod == DISPOSAL_BACKGROUND) ? lsdWidth : tbiWidth;
             int skip = (disposalMethod == DISPOSAL_BACKGROUND) ? -1 : transparentColorIndex;;
@@ -886,22 +890,23 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
     }
     // LZW doesn't parse through all the data, manually set position
     fileSeekCallback(filePositionAfter);
-#if GIFDEBUG > 3
-    extern int32_t parse_start;
-    Serial.println((micros() - parse_start) / 1000);
+#if GIFDEBUG > 2
+    Serial.println(millis() - t);
 #endif
 #endif
-/*
     // Make animation frame visible
     // swapBuffers() call can take up to 1/framerate seconds to return (it waits until a buffer copy is complete)
     // note the time before calling
 
-    // wait until time to display next frame
-    while (nextFrameTime_ms > millis());
-
-    // calculate time to display next frame
-    nextFrameTime_ms = millis() + (10 * frameDelay);
-    if (updateScreenCallback)
+    // Hold until time to display new frame (see comment at start of function)
+    if (_delayAfterDecode) {
+      uint32_t t;
+      if (frameDelay < 2) priorFrameDelay = 20000;
+      while(((t = micros()) - frameStartTime) < priorFrameDelay) yield();
+      //cycleTime += frameDelay * 10;
+      if(updateScreenCallback) {
         (*updateScreenCallback)();
-*/
+      }
+      frameStartTime = t;
+    }
 }

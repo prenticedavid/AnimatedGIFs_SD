@@ -6,6 +6,10 @@
 
 #include <stdint.h>
 
+#ifndef min
+#define min(a, b) (((a) <= (b)) ? (a) : (b))
+#endif
+
 typedef void (*callback)(void);
 typedef void (*pixel_callback)(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue);
 typedef void (*line_callback)(int16_t x, int16_t y, uint8_t *buf, int16_t wid, uint16_t *palette565, int16_t skip);
@@ -32,12 +36,12 @@ template <int maxGifWidth, int maxGifHeight, int lzwMaxBits>
 class GifDecoder {
 public:
     int startDecoding(void);
-    int decodeFrame(void);
-    int getCycleNo(void) { return cycleNo; }  //.kbv complete animations
-    int getCycleTime(void) { return cycleTime; }  //.kbv ms for complete animations
-    int getFrameNo(void) { return frameNo; }  //.kbv which frame in animation
-    int getFrameCount(void) { return frameCount; }  //.kbv how many frames per complete animation
-    int getFrameDelay_ms(void) { return frameDelay * 10; }  //.kbv
+    int decodeFrame(bool delayAfterDecode=true);
+    int getCycleNo(void) { return cycleNo; }  //.kbv
+    int getCycleTime(void) { return cycleTime; }  //.kbv
+    int getFrameCount(void) { return frameCount; }  //.kbv
+    void getSize(uint16_t *w, uint16_t *h) { *w = lsdWidth; *h = lsdHeight; }
+    int getFrameDelay_ms(void) { return frameDelay * 10; }  //.kbv NEW
     
     void setScreenClearCallback(callback f);
     void setUpdateScreenCallback(callback f);
@@ -49,6 +53,8 @@ public:
     void setFilePositionCallback(file_position_callback f);
     void setFileReadCallback(file_read_callback f);
     void setFileReadBlockCallback(file_read_block_callback f);
+
+    int getFrameNumber(void) { return frameNo; }
 
 private:
     void parseTableBasedImage(void);
@@ -71,7 +77,7 @@ private:
     int readByte(void);
 
     void lzw_decode_init(int csize);
-    int lzw_decode(uint8_t *buf, int len, uint8_t *bufend, int align = 0);  //.kbv
+    int lzw_decode(uint8_t *buf, int len, uint8_t *bufend); //, int align = 0);  //.kbv
     void lzw_setTempBuffer(uint8_t * tempBuffer);
     int lzw_get_code(void);
 
@@ -90,6 +96,7 @@ private:
     int tbiPackedBits;
     bool tbiInterlaced;
 
+    bool _delayAfterDecode;
     int frameDelay;
     int transparentColorIndex;
     int prevBackgroundIndex;
@@ -101,13 +108,13 @@ private:
     int rectY;
     int rectWidth;
     int rectHeight;
-    int cycleNo; //.kbv complete animations
-    int cycleTime; //.kbv ms for complete animations
-    int frameNo; //.kbv which frame in animation
-    int frameCount; //.kbv how many frames per complete animation
+    int cycleNo; //.kbv
+    int cycleTime;
+    int frameNo; //.kbv
+    int frameCount; //.kbv
 //    int frameSize; //.kbv
 
-    unsigned long nextFrameTime_ms;
+    uint32_t frameStartTime;
 
     int colorCount;
     rgb_24 palette[256];
@@ -145,7 +152,6 @@ private:
     int end_code;
     int newcodes;               // First available code
     int top_slot;               // Highest code for current size
-    int extra_slot;
     int slot;                   // Last read code
     int fc, oc;
     int bs;                     // Current buffer size for GIF
@@ -154,8 +160,10 @@ private:
     uint8_t * temp_buffer;
 
     uint8_t stack  [LZW_SIZTABLE];
-    uint8_t suffix [LZW_SIZTABLE];
-    uint16_t prefix [LZW_SIZTABLE];
+    uint8_t suffix_prefix[LZW_SIZTABLE * 3]; // combine for quicker access
+
+//    uint8_t suffix [LZW_SIZTABLE];
+//    uint16_t prefix [LZW_SIZTABLE];
 
     // Masks for 0 .. 16 bits
     unsigned int mask[17] = {
@@ -166,10 +174,6 @@ private:
         0xFFFF
     };
 };
-
-//.kbv I really, really do not like this.   All the defines from the xxx_Impl.h files are read before setup() and loop()
-//.kbv I suppose that you could include at the end of AnimatedGIFs_SD.ino
-//.kbv I am happier with adding a statement to CPP file e.g. template class GifDecoder<480, 320, 12>;   // .kbv tell the world.
 
 //#include "GifDecoder_Impl.h"
 //#include "LzwDecoder_Impl.h"
