@@ -39,6 +39,7 @@ public:
     int decodeFrame(bool delayAfterDecode=true);
     int getCycleNo(void) { return cycleNo; }  //.kbv
     int getCycleTime(void) { return cycleTime; }  //.kbv
+    int getFrameNo(void) { return frameNo; }  //.kbv
     int getFrameCount(void) { return frameCount; }  //.kbv
     void getSize(uint16_t *w, uint16_t *h) { *w = lsdWidth; *h = lsdHeight; }
     int getFrameDelay_ms(void) { return frameDelay * 10; }  //.kbv NEW
