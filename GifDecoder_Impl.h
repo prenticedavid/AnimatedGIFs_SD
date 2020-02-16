@@ -250,8 +250,6 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::parseLogicalScreenDescri
     lsdBackgroundIndex = readByte();
     lsdAspectRatio = readByte();
     frameCount = (cycleNo) ? frameNo : 0;  //.kbv
-    frameNo = 0;                           //.kbv
-    cycleTime = 0;                         //.kbv
     cycleNo++;                             //.kbv
 
 #if GIFDEBUG == 1 && DEBUG_SCREEN_DESCRIPTOR == 1
@@ -708,6 +706,7 @@ int GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::startDecoding(void) {
     // Initialize variables
     keyFrame = true;
     cycleNo = 0;
+    cycleTime = 0;                         //.kbv
     prevDisposalMethod = DISPOSAL_NONE;
     transparentColorIndex = NO_TRANSPARENT_INDEX;
     nextFrameTime_ms = 0;
