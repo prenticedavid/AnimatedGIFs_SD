@@ -869,8 +869,8 @@ void GifDecoder<maxGifWidth, maxGifHeight, lzwMaxBits>::decompressAndDisplayFram
 //            align = (ofs < 0) ? -ofs : 0;
 //            int align = 0;
             int len = lzw_decode(imageBuf + tbiImageX, tbiWidth, imageBuf + maxGifWidth - 1); //, align);
-            if (len != tbiWidth)
-                Serial.println(len);
+            //if (len != tbiWidth)
+	    //    Serial.println(len);
             int xofs = (disposalMethod == DISPOSAL_BACKGROUND) ? 0 : tbiImageX;
             int wid = (disposalMethod == DISPOSAL_BACKGROUND) ? lsdWidth : tbiWidth;
             int skip = (disposalMethod == DISPOSAL_BACKGROUND) ? -1 : transparentColorIndex;;
